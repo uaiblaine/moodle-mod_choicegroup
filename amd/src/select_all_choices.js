@@ -22,13 +22,13 @@
  */
 
 /**
- * Listen to the Select all and Deselect all links: data-select-info="1" ticks every checkbox of the form, "0" unticks.
+ * Listen to the Select all and Deselect all buttons: data-select-info="1" ticks every checkbox of the form, "0" unticks.
  */
 export const init = () => {
-    document.querySelectorAll('.selectallnone a').forEach((link) => {
-        link.addEventListener('click', (e) => {
+    document.querySelectorAll('.selectallnone [data-select-info]').forEach((button) => {
+        button.addEventListener('click', (e) => {
             e.preventDefault();
-            const checked = link.dataset.selectInfo === '1';
+            const checked = button.dataset.selectInfo === '1';
             document.querySelectorAll('#attemptsform input[type="checkbox"]').forEach((checkbox) => {
                 checkbox.checked = checked;
             });

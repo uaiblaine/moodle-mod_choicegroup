@@ -621,6 +621,99 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * A set that hits a full group rolls back and still releases every lock it took, after the rollback.
+     *
+     * @return void
+     */
+    public function test_a_failed_set_releases_its_locks_after_the_rollback(): void {
+        global $CFG;
+
+        $this->resetAfterTest();
+        // PHPUnit wraps a test in a transaction, and a rollback inside a nested one undoes nothing until the outer ends.
+        $this->preventResetByRollback();
+        $a = $this->create_setup(['multipleenrollmentspossible' => 1, 'limitanswers' => 1]);
+        $this->set_limit($a, $a->g1->id, 5);
+        $this->set_limit($a, $a->g2->id, 1);
+        $a = $this->load_setup($a);
+        groups_add_member($a->g2->id, $a->s2->id);
+        $this->setUser($a->s1);
+
+        $CFG->lock_factory = '\mod_choicegroup_recording_lock_factory';
+        \mod_choicegroup_recording_lock_factory::$releases = [];
+        \mod_choicegroup_recording_lock_factory::$refuse = [];
+        try {
+            choicegroup_save_user_choices(
+                $a->choicegroup,
+                $a->s1->id,
+                $a->course,
+                $a->cm,
+                [$a->option[$a->g1->id], $a->option[$a->g2->id]]
+            );
+            $this->fail('A set naming a full group was saved.');
+        } catch (\moodle_exception $e) {
+            // The full group refused the set. A lock dropped unreleased would throw a coding_exception from its
+            // destructor instead, under PHPUnit, after releasing itself.
+            $this->assertSame('choicegroupfull', $e->errorcode);
+        } finally {
+            unset($CFG->lock_factory);
+        }
+
+        // Control: the rollback happened, so the group joined before the full one was left again.
+        $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
+        $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
+        sort($keys);
+        $expected = ['group_' . $a->g1->id, 'group_' . $a->g2->id];
+        sort($expected);
+        $this->assertSame($expected, $keys);
+        foreach (\mod_choicegroup_recording_lock_factory::$releases as $release) {
+            $this->assertFalse($release['intransaction'], $release['key'] . ' was released before the rollback.');
+        }
+    }
+
+    /**
+     * When a later group's lock is not granted, the locks taken before it are released and nothing is written.
+     *
+     * @return void
+     */
+    public function test_a_refused_lock_releases_the_locks_taken_before_it(): void {
+        global $CFG;
+
+        $this->resetAfterTest();
+        $a = $this->create_setup(['multipleenrollmentspossible' => 1, 'limitanswers' => 1]);
+        $this->set_limit($a, $a->g1->id, 5);
+        $this->set_limit($a, $a->g2->id, 5);
+        $a = $this->load_setup($a);
+        $this->setUser($a->s1);
+        // The locks are taken in group id order: refuse the second one.
+        $ids = [(int)$a->g1->id, (int)$a->g2->id];
+        sort($ids);
+
+        $CFG->lock_factory = '\mod_choicegroup_recording_lock_factory';
+        \mod_choicegroup_recording_lock_factory::$releases = [];
+        \mod_choicegroup_recording_lock_factory::$refuse = ['group_' . $ids[1]];
+        try {
+            choicegroup_save_user_choices(
+                $a->choicegroup,
+                $a->s1->id,
+                $a->course,
+                $a->cm,
+                [$a->option[$a->g1->id], $a->option[$a->g2->id]]
+            );
+            $this->fail('The set was saved without every lock.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('locktimeout', $e->errorcode);
+        } finally {
+            unset($CFG->lock_factory);
+            \mod_choicegroup_recording_lock_factory::$refuse = [];
+        }
+
+        $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
+        $this->assertFalse(groups_is_member($a->g2->id, $a->s1->id));
+        $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
+        $this->assertSame(['group_' . $ids[0]], $keys);
+    }
+
+    /**
      * Set the member limit of one option.
      *
      * @param \stdClass $setup The setup
