@@ -96,6 +96,9 @@ class selection {
     /** @var array|null Custom field data controllers by group id and field shortname, filled on first use. */
     private ?array $fielddata = null;
 
+    /** @var array|null The offered groupings, by id: name and the option groups in them; filled on first use. */
+    private ?array $groupings = null;
+
     /** @var bool Whether the activity accepts choices now. */
     private bool $open;
 
@@ -292,6 +295,60 @@ class selection {
     }
 
     /**
+     * The groupings the grouping filter offers: those holding at least one option group, when the activity asks for it.
+     *
+     * @return array[] Each with id and name (plain text), by name
+     */
+    public function get_groupings(): array {
+        global $DB;
+
+        if (empty($this->choicegroup->filtergrouping) || !$this->groups) {
+            return [];
+        }
+
+        if ($this->groupings === null) {
+            [$insql, $params] = $DB->get_in_or_equal(array_keys($this->groups), SQL_PARAMS_NAMED, 'cggrp');
+            $params['courseid'] = $this->cm->course;
+            $records = $DB->get_records_sql(
+                "SELECT gg.id, gg.groupingid, gg.groupid, gi.name
+                   FROM {groupings_groups} gg
+                   JOIN {groupings} gi ON gi.id = gg.groupingid
+                  WHERE gi.courseid = :courseid AND gg.groupid $insql",
+                $params
+            );
+            $this->groupings = [];
+            foreach ($records as $record) {
+                $groupingid = (int)$record->groupingid;
+                if (!isset($this->groupings[$groupingid])) {
+                    $this->groupings[$groupingid] = [
+                        'name' => format_string($record->name, true, ['context' => $this->coursecontext, 'escape' => false]),
+                        'groupids' => [],
+                    ];
+                }
+                $this->groupings[$groupingid]['groupids'][] = (int)$record->groupid;
+            }
+        }
+
+        $groupings = [];
+        foreach ($this->groupings as $id => $grouping) {
+            $groupings[] = ['id' => $id, 'name' => $grouping['name']];
+        }
+        usort($groupings, fn($a, $b) => \core_collator::compare($a['name'], $b['name']));
+
+        return $groupings;
+    }
+
+    /**
+     * The name of an option's group as plain text.
+     *
+     * @param int $optionid An option of this instance
+     * @return string
+     */
+    public function get_option_name(int $optionid): string {
+        return $this->get_name($this->groups[(int)$this->choicegroup->option[$optionid]]);
+    }
+
+    /**
      * The sort orders the viewer may pick; sorting by free seats would reveal counts showresults hides.
      *
      * @return string[]
@@ -355,9 +412,18 @@ class selection {
      * @param string $sort One of {@see self::get_sort_keys()}; another value sorts as 'default'
      * @param int $offset The first match to export
      * @param int $limit How many matches to export, at most {@see self::MAX_PAGE_SIZE}
+     * @param int $groupingid Keep only the groups of this grouping; 0, or a grouping the filter does not offer, keeps all
      * @return array With total (the matches) and cards (the exported page)
      */
-    public function query(string $query, array $filters, bool $onlyfree, string $sort, int $offset, int $limit): array {
+    public function query(
+        string $query,
+        array $filters,
+        bool $onlyfree,
+        string $sort,
+        int $offset,
+        int $limit,
+        int $groupingid = 0
+    ): array {
         $filterfields = $this->get_fields(self::FIELD_FILTER);
         $filters = array_filter(
             array_intersect_key($filters, $filterfields),
@@ -367,6 +433,11 @@ class selection {
         $onlyfree = $onlyfree && $this->has_free_filter();
         if ($this->notyetopen) {
             return ['total' => 0, 'cards' => []];
+        }
+
+        $ingrouping = null;
+        if ($groupingid && in_array($groupingid, array_column($this->get_groupings(), 'id'), true)) {
+            $ingrouping = $this->groupings[$groupingid]['groupids'];
         }
 
         $matches = [];
@@ -384,6 +455,10 @@ class selection {
                 if ($this->get_filter_value((int)$groupid, $shortname)[0] !== (string)$value) {
                     continue 2;
                 }
+            }
+
+            if ($ingrouping !== null && !in_array((int)$groupid, $ingrouping, true)) {
+                continue;
             }
 
             if ($onlyfree && $this->get_free((int)$optionid) <= 0) {
@@ -436,7 +511,8 @@ class selection {
             $seats['text'] = get_string('cardseatstaken', 'choicegroup', (object)['count' => $count, 'max' => $max]);
             $seats['status'] = $full ? get_string('cardfull', 'choicegroup') : get_string('cardseatsfree', 'choicegroup', $free);
         } else if ($this->resultsvisible) {
-            $seats['text'] = get_string('cardmembers', 'choicegroup', $count);
+            $seats['text'] = $count === 1 ? get_string('cardmembersone', 'choicegroup') :
+                get_string('cardmembers', 'choicegroup', $count);
         } else if ($haslimit) {
             $seats['status'] = $full ? get_string('cardfull', 'choicegroup') : get_string('cardseatsavailable', 'choicegroup');
         }

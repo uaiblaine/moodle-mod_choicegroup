@@ -137,6 +137,12 @@ if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') &&
         // The helper removes the user from this instance's option groups left unticked, so the posted
         // answer_N_groupid values, which could name any group of the site, are not read.
         choicegroup_save_user_choices($choicegroup, $USER->id, $course, $cm, $selectedoptionids);
+        // Redirect as the single choice does: the page below was computed before the save and would show the old
+        // selection, and a reload would post the set again.
+        redirect(new moodle_url(
+            '/mod/choicegroup/view.php',
+            ['id' => $cm->id, 'notify' => 'choicegroupsaved', 'sesskey' => sesskey()]
+        ));
     } else { // Multipleenrollmentspossible != 1.
         $timenow = time();
         if (has_capability('mod/choicegroup:deleteresponses', $context)) {

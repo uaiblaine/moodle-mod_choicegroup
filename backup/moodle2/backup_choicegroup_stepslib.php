@@ -42,7 +42,7 @@ class backup_choicegroup_activity_structure_step extends backup_activity_structu
             'showresults', 'display', 'allowupdate', 'showunanswered',
             'limitanswers', 'timeopen', 'timeclose', 'timemodified',
             'completionsubmit', 'sortgroupsby', 'onlyactive', 'defaultgroupdescriptionstate',
-            'selectionlayout', 'cardsperpage', 'searchmode', 'filterfreeseats', 'picturecard', 'picturemodal',
+            'selectionlayout', 'cardsperpage', 'searchmode', 'filterfreeseats', 'filtergrouping', 'picturecard', 'picturemodal',
             'modaldescription', 'modalseats', 'modalmembers', 'cardfields', ]);
 
         $options = new backup_nested_element('options');

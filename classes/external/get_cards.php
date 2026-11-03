@@ -54,6 +54,7 @@ class get_cards extends external_api {
             'sort' => new external_value(PARAM_ALPHA, 'default, name, date or free', VALUE_DEFAULT, 'default'),
             'offset' => new external_value(PARAM_INT, 'The first match to return', VALUE_DEFAULT, 0),
             'limit' => new external_value(PARAM_INT, 'How many matches to return', VALUE_DEFAULT, 25),
+            'grouping' => new external_value(PARAM_INT, 'Only the groups of this grouping, 0 for all', VALUE_DEFAULT, 0),
         ]);
     }
 
@@ -67,6 +68,7 @@ class get_cards extends external_api {
      * @param string $sort The sort order
      * @param int $offset The first match to return
      * @param int $limit How many matches to return
+     * @param int $grouping Only the groups of this grouping, 0 for all
      * @return array With total and cards (optionid and html)
      * @throws \moodle_exception When the module is unknown or the viewer may not see it
      */
@@ -77,7 +79,8 @@ class get_cards extends external_api {
         bool $onlyfree = false,
         string $sort = 'default',
         int $offset = 0,
-        int $limit = 25
+        int $limit = 25,
+        int $grouping = 0
     ): array {
         global $CFG, $PAGE, $USER;
         require_once($CFG->dirroot . '/mod/choicegroup/lib.php');
@@ -90,6 +93,7 @@ class get_cards extends external_api {
             'sort' => $sort,
             'offset' => $offset,
             'limit' => $limit,
+            'grouping' => $grouping,
         ]);
 
         $cm = get_coursemodule_from_id('choicegroup', $params['cmid'], 0, false, MUST_EXIST);
@@ -119,7 +123,8 @@ class get_cards extends external_api {
             $params['onlyfree'],
             $params['sort'],
             max(0, $params['offset']),
-            $params['limit']
+            $params['limit'],
+            $params['grouping']
         );
 
         $output = $PAGE->get_renderer('mod_choicegroup');

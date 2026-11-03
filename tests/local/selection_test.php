@@ -438,4 +438,31 @@ final class selection_test extends \advanced_testcase {
         $this->assertFalse($card['seats']['low']);
         $this->assertSame('Seats available', $card['seats']['status']);
     }
+
+    /**
+     * The grouping filter lists only groupings that hold offered groups, and ignores a grouping it does not offer.
+     *
+     * @return void
+     */
+    public function test_grouping_filter(): void {
+        $evening = $this->getDataGenerator()->create_grouping(['courseid' => $this->course->id, 'name' => 'Evening']);
+        $empty = $this->getDataGenerator()->create_grouping(['courseid' => $this->course->id, 'name' => 'Empty']);
+        foreach (['Evening A', 'Evening B'] as $name) {
+            groups_assign_grouping($evening->id, $this->groups[$name]->id);
+        }
+        $viewer = $this->create_member();
+
+        $off = $this->create_instance();
+        $selection = new selection($off, $off->cm, (int)$viewer->id);
+        $this->assertSame([], $selection->get_groupings());
+        $this->assertSame(5, $selection->query('', [], false, 'default', 0, 25, (int)$evening->id)['total']);
+
+        $on = $this->create_instance(['filtergrouping' => 1, 'sortgroupsby' => CHOICEGROUP_SORTGROUPS_NAME]);
+        $selection = new selection($on, $on->cm, (int)$viewer->id);
+        $this->assertSame([['id' => (int)$evening->id, 'name' => 'Evening']], $selection->get_groupings());
+        $page = $selection->query('', [], false, 'name', 0, 25, (int)$evening->id);
+        $this->assertSame(['Evening A', 'Evening B'], self::names($page));
+        $this->assertSame(5, $selection->query('', [], false, 'default', 0, 25, (int)$empty->id)['total']);
+        $this->assertSame('Evening A', $selection->get_option_name((int)array_search($this->groups['Evening A']->id, $on->option)));
+    }
 }

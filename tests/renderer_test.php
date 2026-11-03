@@ -207,6 +207,8 @@ final class renderer_test extends \advanced_testcase {
         $this->assertStringNotContainsString('<input type="hidden" name="answers[]" value="' . $firstoption . '">', $html);
         $this->assertMatchesRegularExpression('/id="choiceid_' . $firstoption . '"[^>]* checked/', $html);
         $this->assertStringContainsString('Showing 10 of 12 groups', $html);
+        $this->assertStringContainsString('2 selected', $html);
+        $this->assertStringContainsString('data-region="chips"', $html);
         // Under PHPUnit no footer prints the AMD calls: read them from the requirements manager.
         $amd = implode("\n", (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires));
         $this->assertStringContainsString('mod_choicegroup/selection', $amd);

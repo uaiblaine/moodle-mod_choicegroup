@@ -42,7 +42,7 @@ Feature: Choose a group from the card layout
     Given I am on the "Group choice 1" "choicegroup activity" page logged in as student1
     And I should see "Showing 3 of 3 groups"
     When I set the field "Search by name" to "rav"
-    Then I should see "1 groups found"
+    Then I should see "1 group found"
     And I should see "Bravo" in the ".mod_choicegroup-cards" "css_element"
     And I should not see "Alpha" in the ".mod_choicegroup-cards" "css_element"
     And I click on "Clear filters" "button"
@@ -67,3 +67,19 @@ Feature: Choose a group from the card layout
     When I set the field "Bravo" to "1"
     And I press "Save my choice"
     Then I should see "Your selection: Bravo"
+
+  @javascript
+  Scenario: With several choices allowed, a chip removes a chosen group before saving
+    Given I am on the "Group choice 1" "choicegroup activity editing" page logged in as teacher1
+    And I set the field "Allow enrollment to multiple groups" to "1"
+    And I press "Save and display"
+    And I log out
+    And I am on the "Group choice 1" "choicegroup activity" page logged in as student1
+    And I set the field "Alpha" to "1"
+    And I set the field "Bravo" to "1"
+    And I should see "2 selected"
+    When I click on "Remove Alpha from the selection" "button"
+    Then I should see "1 selected"
+    And the field "Alpha" matches value "0"
+    And I press "Save my choice"
+    And I should see "Your selection: Bravo"
