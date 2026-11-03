@@ -80,7 +80,9 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 lib.php                 module callbacks + the choice logic (submit, delete, response data)
 view.php                activity page; POST handling for choosing / removing
 report.php              responses report, delete and ODS/XLS/TXT downloads
-renderer.php            html_writer output of the options form and the results
+renderer.php            html_writer output of the table layout and the results; display_selection_cards() for the cards
+classes/local/selection.php   the card layout's rules: search, filters, sort, and what a card shows to whom
+classes/external/get_cards.php + templates/selection_page|card|card_details + amd/src/selection.js   the cards
 mod_form.php            settings form; the group picker is hand-built HTML + amd/src/choicegroupsetting.js
 classes/external.php    the four web services (also used by the Moodle App)
 classes/output/mobile.php + templates/mobile_* + mobile/js/latest/   Moodle App handler
@@ -108,6 +110,12 @@ fork site.
   instance, allowupdate, dates, limits, enrolment); keep them in one lib.php helper.
 - Request-level caches must be keyed by instance (and user): completion, the course overview and
   WS batches evaluate several instances in one request.
+- The card layout decides what a viewer sees in `classes/local/selection.php` only; the page and
+  `get_cards` render from it. Group custom field values bypass `group_handler::can_view()` on
+  purpose, for the fields the teacher placed (`cardfields`, keyed by shortname); seat counts and
+  names never show more than showresults, publish and the group's visibility allow.
+- Multi-choice cards post `answers[]` (option ids); the table posts `answer_N`. view.php reads by
+  the instance's `selectionlayout`, and choices on unloaded pages travel as hidden inputs.
 
 ## Known gaps (next pull request)
 

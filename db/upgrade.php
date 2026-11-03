@@ -128,5 +128,39 @@ function xmldb_choicegroup_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026060401, 'choicegroup');
     }
 
+    if ($oldversion < 2026110301) {
+        // The card layout of the selection page; existing activities keep the table (selectionlayout 0).
+        $table = new xmldb_table('choicegroup');
+        $fields = [
+            new xmldb_field(
+                'selectionlayout',
+                XMLDB_TYPE_INTEGER,
+                '2',
+                null,
+                XMLDB_NOTNULL,
+                null,
+                '0',
+                'defaultgroupdescriptionstate'
+            ),
+            new xmldb_field('cardsperpage', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '25', 'selectionlayout'),
+            new xmldb_field('searchmode', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'cardsperpage'),
+            new xmldb_field('filterfreeseats', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'searchmode'),
+            new xmldb_field('picturecard', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'filterfreeseats'),
+            new xmldb_field('picturemodal', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'picturecard'),
+            new xmldb_field('modaldescription', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'picturemodal'),
+            new xmldb_field('modalseats', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'modaldescription'),
+            new xmldb_field('modalmembers', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'modalseats'),
+            new xmldb_field('cardfields', XMLDB_TYPE_TEXT, null, null, null, null, null, 'modalmembers'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        // Choicegroup savepoint reached.
+        upgrade_mod_savepoint(true, 2026110301, 'choicegroup');
+    }
+
     return true;
 }

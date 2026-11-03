@@ -54,6 +54,14 @@ $functions = [
         'services'      => [MOODLE_OFFICIAL_MOBILE_SERVICE, 'local_mobile'],
     ],
 
+    'mod_choicegroup_get_cards' => [
+        'classname'     => 'mod_choicegroup\external\get_cards',
+        'description'   => 'One page of cards of the selection page, after a search, filters and a sort.',
+        'type'          => 'read',
+        'ajax'          => true,
+        'capabilities'  => 'mod/choicegroup:choose, mod/choicegroup:readresponses',
+    ],
+
     'mod_choicegroup_delete_choicegroup_responses' => [
         'classname'     => 'mod_choicegroup_external',
         'methodname'    => 'delete_choicegroup_responses',

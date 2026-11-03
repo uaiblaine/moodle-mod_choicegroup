@@ -278,3 +278,370 @@
     padding-left: 30px;
 }
 
+
+/* The card layout of the selection page. The native input is the corner marker; the frame behind it draws the card. */
+.mod_choicegroup-selection .mod_choicegroup-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--bs-border-color, var(--border-color, #dee2e6));
+    border-radius: 0.5rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-search {
+    flex: 2 1 16rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-field {
+    flex: 1 1 10rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-field .mod_choicegroup-toolbar-select {
+    width: 100%;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-toolbar-status {
+    margin-left: auto;
+    color: var(--bs-secondary-color, #5c6670);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-cards-fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 1rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 11rem;
+    border-radius: 0.5rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border: 1px solid var(--bs-border-color, var(--border-color, #dee2e6));
+    border-radius: inherit;
+    background: var(--bs-body-bg, #fff);
+    pointer-events: none;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    border: 2px solid var(--bs-secondary-color, #6c757d);
+    border-radius: 50%;
+    background: var(--bs-body-bg, #fff);
+    appearance: none;
+    cursor: pointer;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card.is-multiple .mod_choicegroup-card-input {
+    border-radius: 0.25rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:checked {
+    border-color: var(--bs-primary, var(--primary, #0f6cbf));
+    background: var(--bs-primary, var(--primary, #0f6cbf));
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:disabled {
+    border-style: dashed;
+    cursor: default;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:checked ~ .mod_choicegroup-card-frame {
+    border: 2px solid var(--bs-primary, var(--primary, #0f6cbf));
+    background: var(--bs-primary-bg-subtle, var(--bs-body-bg, #eef5fc));
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:disabled:not(:checked) ~ .mod_choicegroup-card-frame {
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+/* An outline rather than a shadow: it survives the forced colours of high-contrast mode. */
+.mod_choicegroup-selection .mod_choicegroup-card-input:focus-visible {
+    outline: 0;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:focus-visible ~ .mod_choicegroup-card-frame {
+    outline: 3px solid var(--bs-primary, var(--primary, #0f6cbf));
+    outline-offset: 2px;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-check {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 3;
+    display: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    pointer-events: none;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-check::after {
+    position: absolute;
+    top: 0.25rem;
+    left: 0.45rem;
+    width: 0.35rem;
+    height: 0.6rem;
+    border: solid var(--bs-body-bg, #fff);
+    border-width: 0 0.15rem 0.15rem 0;
+    transform: rotate(45deg);
+    content: "";
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-input:checked ~ .mod_choicegroup-card-check {
+    display: block;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-body {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 1rem 3rem 0 1rem;
+    cursor: pointer;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card.is-full .mod_choicegroup-card-body {
+    color: var(--bs-secondary-color, #5c6670);
+    cursor: default;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-picture {
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.375rem;
+    object-fit: cover;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-name,
+.mod_choicegroup-selection .mod_choicegroup-card-excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-name {
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-excerpt {
+    font-size: 0.875rem;
+    color: var(--bs-secondary-color, #5c6670);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-tag {
+    padding: 0.3rem 0.5rem;
+    border-radius: 50rem;
+    background: var(--bs-secondary-bg, #eef1f4);
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-seats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-top: auto;
+    padding-bottom: 0.25rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-seatsline {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-seats-status,
+.mod_choicegroup-details .mod_choicegroup-seats-status {
+    font-weight: 600;
+    color: var(--bs-success-text-emphasis, #22652a);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-seats-status.is-low,
+.mod_choicegroup-selection .mod_choicegroup-seats-status.is-full,
+.mod_choicegroup-details .mod_choicegroup-seats-status.is-low,
+.mod_choicegroup-details .mod_choicegroup-seats-status.is-full {
+    color: var(--bs-warning-text-emphasis, #8a3b00);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-seats-bar,
+.mod_choicegroup-details .mod_choicegroup-seats-bar {
+    display: block;
+    height: 0.375rem;
+    overflow: hidden;
+    border-radius: 0.1875rem;
+    background: var(--bs-secondary-bg, #e9ecef);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-seats-bar > span,
+.mod_choicegroup-details .mod_choicegroup-seats-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--bs-primary, var(--primary, #0f6cbf));
+}
+
+.mod_choicegroup-selection .mod_choicegroup-seats-bar.is-full > span,
+.mod_choicegroup-details .mod_choicegroup-seats-bar.is-full > span {
+    background: var(--bs-warning-text-emphasis, #b35a00);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card-fullname {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    z-index: 4;
+    display: none;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--bs-emphasis-color, #1d2125);
+    color: var(--bs-body-bg, #fff);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    transform: translateY(-100%);
+    pointer-events: none;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-card.is-truncated:hover .mod_choicegroup-card-fullname,
+.mod_choicegroup-selection .mod_choicegroup-card.is-truncated:focus-within .mod_choicegroup-card-fullname {
+    display: block;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1.25rem 0;
+    color: var(--bs-secondary-color, #5c6670);
+}
+
+/* Not sticky: a bar over the last row of cards hid them from the pointer and the keyboard focus. */
+.mod_choicegroup-selection .mod_choicegroup-savebar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--bs-border-color, var(--border-color, #dee2e6));
+    border-radius: 0.5rem;
+    background: var(--bs-body-bg, #fff);
+}
+
+.mod_choicegroup-selection .mod_choicegroup-savebar-status {
+    display: flex;
+    flex-direction: column;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-savebar-message {
+    color: var(--bs-danger-text-emphasis, #a3142d);
+    font-size: 0.875rem;
+}
+
+.mod_choicegroup-selection .mod_choicegroup-savebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dir-rtl .mod_choicegroup-selection .mod_choicegroup-card-input,
+.dir-rtl .mod_choicegroup-selection .mod_choicegroup-card-check {
+    right: auto;
+    left: 1rem;
+}
+
+.dir-rtl .mod_choicegroup-selection .mod_choicegroup-card-body {
+    padding: 1rem 1rem 0 3rem;
+}
+
+/* The details dialogue: core/modal appends it to the body, outside the selection region. */
+.mod_choicegroup-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.mod_choicegroup-details .mod_choicegroup-details-picture {
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 0.5rem;
+    object-fit: cover;
+}
+
+.mod_choicegroup-details .mod_choicegroup-details-fields {
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) 1fr;
+    gap: 0.375rem 1rem;
+    margin: 0;
+}
+
+.mod_choicegroup-details .mod_choicegroup-details-fields dd {
+    margin: 0;
+}
+
+.mod_choicegroup-details .mod_choicegroup-details-members {
+    columns: 2 12rem;
+    margin: 0;
+    padding-left: 1.25rem;
+}

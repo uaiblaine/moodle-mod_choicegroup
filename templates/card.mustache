@@ -1,0 +1,88 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/card
+
+    One group of the card layout. The native radio or checkbox is the corner marker and the whole card is its label;
+    the details button sits outside the label, so Tab reaches both.
+
+    Context variables required for this template:
+    * optionid, inputid, inputname, multiple, checked, disabled - the form control
+    * name - the group name, plain text
+    * pictureurl - URL of the group picture, or empty
+    * excerpt - the start of the description as plain text, or empty
+    * hastags, tags - custom field values shown on the card: label and value, plain text
+    * seats - has, text, status, haslimit, counts, percent, full, low
+    * details - the context of mod_choicegroup/card_details
+
+    Example context (json):
+    {
+        "optionid": 7,
+        "inputid": "choiceid_7",
+        "inputname": "answer",
+        "multiple": false,
+        "checked": false,
+        "disabled": false,
+        "name": "Group 12 · Tuesday and Thursday · Evening",
+        "pictureurl": "https://example.com/pluginfile.php/1/group/icon/1/f1",
+        "excerpt": "Tuesdays and Thursdays, with a final team project.",
+        "hastags": true,
+        "tags": [{"label": "Shift", "value": "Evening"}],
+        "seats": {"has": true, "text": "18 of 30 seats taken", "status": "12 free", "haslimit": true, "counts": true,
+            "percent": 60, "full": false, "low": false},
+        "details": {"picture": "", "description": "<p>Final team project.</p>", "seatsinfo": false, "hasfields": false,
+            "fields": [], "members": null}
+    }
+}}
+<div class="mod_choicegroup-card{{#multiple}} is-multiple{{/multiple}}{{#seats.full}} is-full{{/seats.full}}" data-region="card" data-optionid="{{optionid}}">
+    <input class="mod_choicegroup-card-input" type="{{#multiple}}checkbox{{/multiple}}{{^multiple}}radio{{/multiple}}" id="{{inputid}}" name="{{inputname}}" value="{{optionid}}" data-region="card-input"{{#checked}} checked{{/checked}}{{#disabled}} disabled data-locked="1"{{/disabled}}>
+    <span class="mod_choicegroup-card-frame" aria-hidden="true"></span>
+    <span class="mod_choicegroup-card-check" aria-hidden="true"></span>
+    <label class="mod_choicegroup-card-body" for="{{inputid}}">
+        <span class="mod_choicegroup-card-head">
+            {{#pictureurl}}
+                <img class="mod_choicegroup-card-picture" src="{{pictureurl}}" alt="" width="40" height="40">
+            {{/pictureurl}}
+            <span class="mod_choicegroup-card-name" data-region="card-name">{{name}}</span>
+        </span>
+        {{#excerpt}}
+            <span class="mod_choicegroup-card-excerpt">{{excerpt}}</span>
+        {{/excerpt}}
+        {{#hastags}}
+            <span class="mod_choicegroup-card-tags">
+                {{#tags}}
+                    <span class="mod_choicegroup-card-tag"><span class="visually-hidden">{{label}}: </span>{{value}}</span>
+                {{/tags}}
+            </span>
+        {{/hastags}}
+        {{#seats.has}}
+            <span class="mod_choicegroup-card-seats">
+                <span class="mod_choicegroup-card-seatsline"><span>{{seats.text}}</span><span class="mod_choicegroup-seats-status{{#seats.full}} is-full{{/seats.full}}{{#seats.low}} is-low{{/seats.low}}">{{seats.status}}</span></span>
+                {{#seats.counts}}{{#seats.haslimit}}
+                    <span class="mod_choicegroup-seats-bar{{#seats.full}} is-full{{/seats.full}}" aria-hidden="true"><span style="width: {{seats.percent}}%"></span></span>
+                {{/seats.haslimit}}{{/seats.counts}}
+            </span>
+        {{/seats.has}}
+    </label>
+    <span class="mod_choicegroup-card-fullname" aria-hidden="true">{{name}}</span>
+    <div class="mod_choicegroup-card-actions">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="details" aria-label="{{#str}}carddetailsfor, choicegroup, {{name}}{{/str}}">{{#str}}carddetails, choicegroup{{/str}}</button>
+    </div>
+    <template data-region="card-details">
+        {{#details}}{{> mod_choicegroup/card_details}}{{/details}}
+    </template>
+</div>
