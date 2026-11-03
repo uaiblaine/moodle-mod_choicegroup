@@ -18,7 +18,7 @@
     @template mod_choicegroup/results_names
 
     The responses report with the names of the users listed under each group, and the form that deletes the selected
-    memberships. amd/src/select_all_choices.js reads the form id attemptsform and the .selectallnone links.
+    memberships. amd/src/select_all_choices.js reads the form id attemptsform and the .selectallnone buttons.
 
     Context variables required for this template:
     * hasform - whether the viewer may read the responses, which wraps the table in the form
@@ -89,8 +89,8 @@
     <div class="responseaction">
         {{#candelete}}
             <div class="selectallnone">
-                <a href="#" data-select-info="1">{{#str}}selectall, core{{/str}}</a> /
-                <a href="#" data-select-info="0">{{#str}}deselectall, core{{/str}}</a>
+                <button type="button" class="btn btn-link p-0 align-baseline" data-select-info="1">{{#str}}selectall, core{{/str}}</button> /
+                <button type="button" class="btn btn-link p-0 align-baseline" data-select-info="0">{{#str}}deselectall, core{{/str}}</button>
             </div>
             <label for="menuaction" class="me-1"> {{#str}}withselected, choicegroup{{/str}} </label>
             {{{actionselect}}}

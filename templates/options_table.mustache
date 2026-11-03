@@ -56,12 +56,12 @@
         "memberids": "choicegroup_1",
         "rows": [
             {"missing": false, "optionid": 1, "name": "Group A", "full": false,
-                "description": "<p>Tuesdays and Thursdays.</p>", "inputname": "answer", "inputtype": "radio",
+                "description": "<p>Tuesdays and Thursdays.</p>", "inputname": "answer_0", "inputtype": "checkbox",
                 "checked": false, "disabled": false, "count": 2, "maxanswers": 5,
                 "members": [{"name": "Ana Souza", "first": true}, {"name": "Bruno Lima", "first": false}]}
         ],
-        "multiple": false,
-        "numberofgroups": 0,
+        "multiple": true,
+        "numberofgroups": 1,
         "mappings": [{"name": "answer_0_groupid", "groupid": 7}],
         "sesskey": "abc123",
         "cmid": 12,
@@ -81,7 +81,7 @@
                 <th class="width40">
                     {{#str}}group, core{{/str}}
                     <button type="button" class="choicegroup-descriptiondisplay choicegroup-descriptionshow btn btn-secondary ms-1"
-                        aria-controls="{{descriptionids}}"
+                        {{#descriptionids}}aria-controls="{{descriptionids}}"{{/descriptionids}}
                         aria-expanded="{{#descriptionshidden}}false{{/descriptionshidden}}{{^descriptionshidden}}true{{/descriptionshidden}}">
                         {{#descriptionshidden}}{{#str}}showdescription, choicegroup{{/str}}{{/descriptionshidden}}
                         {{^descriptionshidden}}{{#str}}hidedescription, choicegroup{{/str}}{{/descriptionshidden}}
@@ -97,7 +97,7 @@
                     <th class="width40">
                         {{#str}}groupmembers, choicegroup{{/str}}
                         <button type="button" class="choicegroup-memberdisplay choicegroup-membershow btn btn-secondary ms-1"
-                            aria-controls="{{memberids}}" aria-expanded="false">{{#str}}showgroupmembers, choicegroup{{/str}}</button>
+                            {{#memberids}}aria-controls="{{memberids}}"{{/memberids}} aria-expanded="false">{{#str}}showgroupmembers, choicegroup{{/str}}</button>
                     </th>
                 {{/showmembers}}
             </tr>

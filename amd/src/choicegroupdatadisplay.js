@@ -60,7 +60,11 @@ const flip = async(button, toggle) => {
         region.classList.toggle('hidden', !expanded);
     });
     button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    button.textContent = await getString(expanded ? toggle.hide : toggle.show, 'mod_choicegroup');
+    const text = await getString(expanded ? toggle.hide : toggle.show, 'mod_choicegroup');
+    // A second click may have flipped the toggle back while the string loaded: the text follows the state it is in now.
+    if (button.getAttribute('aria-expanded') === (expanded ? 'true' : 'false')) {
+        button.textContent = text;
+    }
 };
 
 /**

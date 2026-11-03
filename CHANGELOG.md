@@ -100,3 +100,7 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
 - With several choices, the member-limit locks of the groups a submission joins are held until its
   transaction commits: released earlier, a concurrent submission could not yet count the new member
   and a limited group could overfill by one.
+- The report's Select all and Deselect all are buttons, like the table's toggles; a toggle with no
+  rows no longer carries an empty `aria-controls`, and a toggle clicked twice quickly keeps a label
+  that matches its state.
+- Unused rules for the old member toggle are gone from `styles.css`.

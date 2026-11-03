@@ -38,6 +38,9 @@ class mod_choicegroup_recording_lock_factory implements \core\lock\lock_factory 
     /** @var array Each release: the resource key and whether a transaction was open, in order */
     public static $releases = [];
 
+    /** @var string[] The resource keys whose lock is refused, as a timeout would */
+    public static $refuse = [];
+
     /**
      * Create the factory.
      *
@@ -74,14 +77,18 @@ class mod_choicegroup_recording_lock_factory implements \core\lock\lock_factory 
     }
 
     /**
-     * Grant the lock.
+     * Grant the lock, unless its resource is in $refuse.
      *
      * @param string $resource The resource
      * @param int $timeout The timeout
      * @param int $maxlifetime The maximum lifetime
-     * @return \core\lock\lock
+     * @return \core\lock\lock|false
      */
     public function get_lock($resource, $timeout, $maxlifetime = 86400) {
+        if (in_array($resource, self::$refuse, true)) {
+            return false;
+        }
+
         return new \core\lock\lock($resource, $this);
     }
 
