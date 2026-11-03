@@ -290,6 +290,108 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
     }
 
     /**
+     * Returns the card layout of the options: search, filters, the first page of cards and the save bar.
+     *
+     * The JavaScript takes over the toolbar and "load more" through mod_choicegroup_get_cards; without it the first
+     * page still posts like the table does.
+     *
+     * @param stdClass $choicegroup The instance, as choicegroup_get_choicegroup() returns it
+     * @param stdClass $cm The course module
+     * @return string The HTML
+     */
+    public function display_selection_cards(stdClass $choicegroup, stdClass $cm): string {
+        global $USER;
+
+        $selection = new \mod_choicegroup\local\selection($choicegroup, $cm, (int)$USER->id);
+        $perpage = max(1, min((int)$choicegroup->cardsperpage, \mod_choicegroup\local\selection::MAX_PAGE_SIZE));
+        $page = $selection->query('', [], false, 'default', 0, $perpage);
+        $multiple = !empty($choicegroup->multipleenrollmentspossible);
+        $canchoose = $selection->can_choose();
+
+        // The viewer's choices outside the first page go along as hidden inputs, or saving would drop them.
+        $shownids = array_column($page['cards'], 'optionid');
+        $kept = [];
+        foreach (array_diff($selection->get_chosen(), $shownids) as $optionid) {
+            $kept[] = ['name' => $multiple ? 'answers[]' : 'answer', 'value' => $optionid];
+        }
+
+        $filters = $selection->get_filters();
+        $search = $selection->has_search();
+        $freefilter = $selection->has_free_filter();
+        $hastoolbar = $search || $filters || $freefilter;
+        $sorts = [];
+        if ($hastoolbar) {
+            foreach ($selection->get_sort_keys() as $key) {
+                $label = match ($key) {
+                    'name' => get_string('cardsort_name', 'choicegroup'),
+                    'date' => get_string('cardsort_date', 'choicegroup'),
+                    'free' => get_string('cardsort_free', 'choicegroup'),
+                    default => get_string('cardsort_default', 'choicegroup'),
+                };
+                $sorts[] = ['value' => $key, 'label' => $label];
+            }
+        }
+
+        $message = '';
+        if (!isloggedin() || isguestuser()) {
+            $message = get_string('havetologin', 'choicegroup');
+        } else if ($canchoose && $selection->is_all_full()) {
+            $message = get_string('choicegroupfull', 'choicegroup');
+            $canchoose = false;
+        }
+
+        $removeurl = '';
+        if ($canchoose && !$multiple && $choicegroup->allowupdate && $selection->get_chosen()) {
+            $removeurl = (new moodle_url(
+                '/mod/choicegroup/view.php',
+                ['id' => $cm->id, 'action' => 'delchoicegroup', 'sesskey' => sesskey()]
+            ))->out(false);
+        }
+
+        $chosen = count($selection->get_chosen());
+        $data = [
+            'uniqid' => 'mod_choicegroup-selection-' . $cm->id,
+            'actionurl' => (new moodle_url('/mod/choicegroup/view.php'))->out(false),
+            'sesskey' => sesskey(),
+            'cmid' => $cm->id,
+            'instructions' => $multiple ? '' : get_string('cardchooseone', 'choicegroup'),
+            'hastoolbar' => $hastoolbar,
+            'search' => $search,
+            'filters' => $filters,
+            'hassorts' => count($sorts) > 1,
+            'sorts' => $sorts,
+            'freefilter' => $freefilter,
+            'cards' => $page['cards'],
+            'found' => get_string('cardfound', 'choicegroup', $page['total']),
+            'shown' => get_string('cardshown', 'choicegroup', (object)[
+                'shown' => count($page['cards']),
+                'total' => $page['total'],
+            ]),
+            'hasmore' => $page['total'] > count($page['cards']),
+            'empty' => $page['total'] === 0,
+            'kept' => $kept,
+            'canchoose' => $canchoose,
+            'counter' => $multiple ? get_string('cardselected', 'choicegroup', $chosen) : '',
+            'removeurl' => $removeurl,
+            'message' => $message,
+        ];
+
+        $this->page->requires->js_call_amd('mod_choicegroup/selection', 'init', [$data['uniqid'], [
+            'cmid' => (int)$cm->id,
+            'multiple' => $multiple,
+            'min' => $multiple ? (int)($choicegroup->minenrollments ?? 0) : 0,
+            'max' => $multiple ? (int)($choicegroup->maxenrollments ?? 0) : 0,
+            'perpage' => $perpage,
+            'total' => $page['total'],
+            'chosen' => $selection->get_chosen(),
+            'canchoose' => $canchoose,
+            'remote' => isloggedin() && !isguestuser(),
+        ]]);
+
+        return $this->render_from_template('mod_choicegroup/selection_page', $data);
+    }
+
+    /**
      * Returns the HTML of the results, named or anonymous according to the publish setting.
      *
      * @param object $choicegroups

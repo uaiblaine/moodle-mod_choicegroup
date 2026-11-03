@@ -34,11 +34,31 @@ No post-install step and no external service.
 2. Add a *Group choice* activity and select the groups students may choose from; set the limits,
    dates and display options.
 
+### The selection page
+
+Under *Selection page* in the activity settings, *Show the groups as* picks the layout:
+
+- **Cards with search and filters** (the default for new activities): one card per group, with the
+  group picture, the seats and the custom field values the activity chooses to show. The cards load
+  a page at a time (10, 25, 50 or 100) with "Load more"; a search by name (automatic from 10 groups,
+  always or never), one filter per chosen group custom field, an "only groups with free seats"
+  filter and a sort order narrow them on the server. A *Details* button on each card opens a
+  dialogue with the description, the seats, the chosen field values and the member list, and offers
+  to choose the group.
+- **A table**: the layout of earlier versions, which existing activities keep until a teacher
+  switches.
+
+Group custom fields (*Site administration > Courses > Groups > Group custom fields*) are shown to
+students only in the activities whose teacher picks them, per field, as a filter, a tag on the
+card or a line in the details. The seat counts and member names follow *Publish results*,
+*Privacy of results* and each group's own visibility: the card settings can hide them, never show
+more.
+
 ## Data the plugin keeps
 
 | Table | What it keeps | How long |
 |---|---|---|
-| `choicegroup` | One row per activity: name, intro, the display, limit, date and completion settings. No user data. | Until the activity is deleted. |
+| `choicegroup` | One row per activity: name, intro, the display, limit, date and completion settings, and the selection page settings (layout, page size, search, filters, and which group custom fields show where, by field shortname). No user data. | Until the activity is deleted. |
 | `choicegroup_options` | One row per offered group: the activity, the course group id and that group's member limit. No user data. | Until the option or the activity is deleted. |
 
 A student's choice is not stored by the plugin: it **is** the student's membership of the course
@@ -71,6 +91,12 @@ with the acting user and, for choice changes, the affected user.
 - `choicegroup/sortgroupsby`: default order of the groups on the activity page (creation date or
   name).
 - `choicegroup/defaultgroupdescriptionstate`: whether group descriptions start shown or hidden.
+
+## Web services
+
+`mod_choicegroup_get_cards` (AJAX, read) returns one page of rendered cards after a search, filters
+and a sort. It needs `mod/choicegroup:choose` or `mod/choicegroup:readresponses` in the activity and
+refuses guests.
 
 ## Moodle App
 

@@ -27,6 +27,8 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/course/moodleform_mod.php');
 
+use mod_choicegroup\local\selection;
+
 /**
  * Activity instance editing form.
  */
@@ -307,6 +309,8 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         $mform->setDefault('defaultgroupdescriptionstate', $groupdescriptionstate);
         // Go on with the remainder of the form.
 
+        $this->add_selection_page_elements();
+
         $mform->addElement('header', 'timerestricthdr', get_string('timerestrict', 'choicegroup'));
         $mform->addElement('checkbox', 'timerestrict', get_string('timerestrict', 'choicegroup'));
 
@@ -318,6 +322,94 @@ class mod_choicegroup_mod_form extends moodleform_mod {
 
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
+    }
+
+    /**
+     * Add the settings of the card layout of the selection page.
+     *
+     * No hideIf on the layout: a hidden element is not posted on 5.3, so switching to the table would reset them.
+     *
+     * @return void
+     */
+    protected function add_selection_page_elements(): void {
+        $mform = $this->_form;
+
+        $mform->addElement('header', 'selectionpagehdr', get_string('selectionpage', 'choicegroup'));
+
+        $mform->addElement('select', 'selectionlayout', get_string('selectionlayout', 'choicegroup'), [
+            selection::LAYOUT_CARDS => get_string('selectionlayout_cards', 'choicegroup'),
+            selection::LAYOUT_TABLE => get_string('selectionlayout_table', 'choicegroup'),
+        ]);
+        $mform->addHelpButton('selectionlayout', 'selectionlayout', 'choicegroup');
+        // New activities get the cards; existing ones keep the table they had (the column defaults to it).
+        $mform->setDefault('selectionlayout', selection::LAYOUT_CARDS);
+
+        $mform->addElement('select', 'cardsperpage', get_string('cardsperpage', 'choicegroup'), [
+            10 => 10,
+            25 => 25,
+            50 => 50,
+            100 => 100,
+        ]);
+        $mform->addHelpButton('cardsperpage', 'cardsperpage', 'choicegroup');
+        $mform->setDefault('cardsperpage', 25);
+
+        $mform->addElement('select', 'searchmode', get_string('searchmode', 'choicegroup'), [
+            selection::SEARCH_AUTO => get_string('searchmode_auto', 'choicegroup', selection::SEARCH_AUTO_MINIMUM),
+            selection::SEARCH_ALWAYS => get_string('searchmode_always', 'choicegroup'),
+            selection::SEARCH_NEVER => get_string('searchmode_never', 'choicegroup'),
+        ]);
+        $mform->setDefault('searchmode', selection::SEARCH_AUTO);
+
+        $mform->addElement('advcheckbox', 'filterfreeseats', get_string('filterfreeseats', 'choicegroup'));
+        $mform->setDefault('filterfreeseats', 1);
+
+        $sitefields = selection::get_site_fields();
+        if (!$sitefields) {
+            $mform->addElement(
+                'static',
+                'cardfieldsnone',
+                get_string('cardfields', 'choicegroup'),
+                get_string('cardfieldsnone', 'choicegroup')
+            );
+        }
+
+        $placements = [
+            selection::FIELD_FILTER => ['filter', get_string('cardfieldfilter', 'choicegroup')],
+            selection::FIELD_CARD => ['card', get_string('cardfieldcard', 'choicegroup')],
+            selection::FIELD_MODAL => ['modal', get_string('cardfieldmodal', 'choicegroup')],
+        ];
+        $first = true;
+        foreach ($sitefields as $field) {
+            $elements = [];
+            foreach ($placements as $placement => [$suffix, $label]) {
+                if (selection::field_accepts($field->get('type'), $placement)) {
+                    $elements[] = $mform->createElement('advcheckbox', 'cf_' . $field->get('id') . '_' . $suffix, '', $label);
+                }
+            }
+
+            if (!$elements) {
+                continue;
+            }
+
+            $name = 'cardfield_' . $field->get('id');
+            $mform->addGroup($elements, $name, $field->get_formatted_name(), ' ', false);
+            if ($first) {
+                $mform->addHelpButton($name, 'cardfields', 'choicegroup');
+                $first = false;
+            }
+        }
+
+        $mform->addElement('advcheckbox', 'picturecard', get_string('picturecard', 'choicegroup'));
+        $mform->setDefault('picturecard', 1);
+        $mform->addElement('advcheckbox', 'picturemodal', get_string('picturemodal', 'choicegroup'));
+        $mform->setDefault('picturemodal', 1);
+        $mform->addElement('advcheckbox', 'modaldescription', get_string('modaldescription', 'choicegroup'));
+        $mform->setDefault('modaldescription', 1);
+        $mform->addElement('advcheckbox', 'modalseats', get_string('modalseats', 'choicegroup'));
+        $mform->setDefault('modalseats', 1);
+        $mform->addElement('advcheckbox', 'modalmembers', get_string('modalmembers', 'choicegroup'));
+        $mform->addHelpButton('modalmembers', 'modalmembers', 'choicegroup');
+        $mform->setDefault('modalmembers', 1);
     }
 
     /**
@@ -337,6 +429,14 @@ class mod_choicegroup_mod_form extends moodleform_mod {
             $defaultvalues['timerestrict'] = 0;
         } else {
             $defaultvalues['timerestrict'] = 1;
+        }
+
+        $stored = selection::parse_card_fields($defaultvalues['cardfields'] ?? null);
+        foreach (selection::get_site_fields() as $shortname => $field) {
+            $bits = $stored[$shortname] ?? 0;
+            $defaultvalues['cf_' . $field->get('id') . '_filter'] = (int)(bool)($bits & selection::FIELD_FILTER);
+            $defaultvalues['cf_' . $field->get('id') . '_card'] = (int)(bool)($bits & selection::FIELD_CARD);
+            $defaultvalues['cf_' . $field->get('id') . '_modal'] = (int)(bool)($bits & selection::FIELD_MODAL);
         }
     }
 
@@ -370,6 +470,12 @@ class mod_choicegroup_mod_form extends moodleform_mod {
      */
     public function data_postprocessing($data): void {
         parent::data_postprocessing($data);
+
+        // The bulk completion form has no selection page section: it leaves cardfields as stored.
+        if (property_exists($data, 'selectionlayout')) {
+            $data->cardfields = selection::serialise_card_fields($data);
+        }
+
         // Set up completion section even if checkbox is not ticked.
         if (!empty($data->completionunlocked)) {
             if (empty($data->completionsubmit)) {

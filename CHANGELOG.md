@@ -22,10 +22,15 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
   privacy compliance.
 - `lang/pt_br` (kept out of the release zip).
 - README section on the data the plugin keeps, its capabilities, settings and Moodle App support.
+- A card layout of the selection page (*Selection page* settings, the default for new activities):
+  clickable cards with the native group picture and the seats, search by name, filters by the group
+  custom fields the activity picks, an "only groups with free seats" filter, sorting, "Load more"
+  and a details dialogue that can choose the group. Search, filters and paging run on the server
+  through the new `mod_choicegroup_get_cards` web service. Existing activities keep the table.
 
 ### Changed
 
-- Version 2026110300.
+- Version 2026110301 (ten `choicegroup` columns for the selection page settings).
 - The submit web service refuses a change of choice with `updatenotallowed` (it threw
   `missingrequiredcapability`).
 - Group choice strings in sentence case.

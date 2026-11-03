@@ -162,4 +162,53 @@ final class renderer_test extends \advanced_testcase {
 
         $this->assertStringContainsString('results anonymous', $html);
     }
+
+    /**
+     * The card page renders the first page only, and carries the viewer's choices beyond it as hidden inputs.
+     *
+     * @return void
+     */
+    public function test_card_page_keeps_choices_beyond_the_first_page(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $groups = [];
+        foreach (range(1, 12) as $i) {
+            $groups[] = $generator->create_group(['courseid' => $course->id, 'name' => sprintf('Group %02d', $i)]);
+        }
+        $module = $generator->create_module('choicegroup', [
+            'course' => $course->id,
+            'groups' => array_map(fn($group) => $group->id, $groups),
+            'selectionlayout' => \mod_choicegroup\local\selection::LAYOUT_CARDS,
+            'cardsperpage' => 10,
+            'multipleenrollmentspossible' => 1,
+            'allowupdate' => 1,
+            'sortgroupsby' => CHOICEGROUP_SORTGROUPS_NAME,
+        ]);
+        $student = $generator->create_and_enrol($course, 'student');
+        groups_add_member($groups[0]->id, $student->id);
+        groups_add_member($groups[11]->id, $student->id);
+        $this->setUser($student);
+
+        $choicegroup = choicegroup_get_choicegroup($module->id);
+        $cm = get_coursemodule_from_id('choicegroup', $module->cmid);
+        $PAGE->set_url('/mod/choicegroup/view.php', ['id' => $cm->id]);
+        $PAGE->set_context(\context_module::instance($cm->id));
+        $html = $PAGE->get_renderer('mod_choicegroup')->display_selection_cards($choicegroup, $cm);
+
+        $this->assertSame(10, substr_count($html, 'data-region="card"'));
+        $this->assertStringContainsString('Group 01', $html);
+        $this->assertStringNotContainsString('Group 12', $html);
+        $lastoption = (int)array_search($groups[11]->id, $choicegroup->option);
+        $firstoption = (int)array_search($groups[0]->id, $choicegroup->option);
+        $this->assertStringContainsString('<input type="hidden" name="answers[]" value="' . $lastoption . '">', $html);
+        $this->assertStringNotContainsString('<input type="hidden" name="answers[]" value="' . $firstoption . '">', $html);
+        $this->assertMatchesRegularExpression('/id="choiceid_' . $firstoption . '"[^>]* checked/', $html);
+        $this->assertStringContainsString('Showing 10 of 12 groups', $html);
+        // Under PHPUnit no footer prints the AMD calls: read them from the requirements manager.
+        $amd = implode("\n", (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires));
+        $this->assertStringContainsString('mod_choicegroup/selection', $amd);
+    }
 }

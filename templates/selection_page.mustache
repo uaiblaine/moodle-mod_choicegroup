@@ -1,0 +1,148 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/selection_page
+
+    The card layout of the selection page: search and filters, the first page of cards, "load more" and the save bar.
+    mod_choicegroup/selection loads the next pages and the filtered results through mod_choicegroup_get_cards.
+
+    Context variables required for this template:
+    * uniqid - prefix of the element ids
+    * actionurl, sesskey, cmid - the form
+    * instructions - what to choose, plain text
+    * hastoolbar, search, filters, hassorts, sorts, freefilter - the toolbar; each filter has shortname, label and options
+    * cards - the first page, each the context of mod_choicegroup/card
+    * found, shown, hasmore, empty - the counts under the cards, plain text
+    * kept - hidden inputs for the viewer's choices outside the first page: name and value
+    * canchoose, counter, removeurl - the save bar
+    * message - a notice instead of the save bar, plain text, or empty
+
+    Example context (json):
+    {
+        "uniqid": "cg1",
+        "actionurl": "https://example.com/mod/choicegroup/view.php",
+        "sesskey": "abc123",
+        "cmid": 3,
+        "instructions": "Choose one group.",
+        "hastoolbar": true,
+        "search": true,
+        "filters": [{"shortname": "shift", "label": "Shift", "options": [{"value": "1", "label": "Morning"}]}],
+        "hassorts": true,
+        "sorts": [{"value": "default", "label": "Activity order"}, {"value": "name", "label": "Name"}],
+        "freefilter": true,
+        "cards": [{"optionid": 7, "inputid": "choiceid_7", "inputname": "answer", "multiple": false, "checked": false,
+            "disabled": false, "name": "Group 12", "pictureurl": "", "excerpt": "", "hastags": false, "tags": [],
+            "seats": {"has": false}, "details": {"picture": "", "description": "", "seatsinfo": false,
+            "hasfields": false, "fields": [], "members": null} }],
+        "found": "1 group found",
+        "shown": "Showing 1 of 1 groups",
+        "hasmore": false,
+        "empty": false,
+        "kept": [{"name": "answer", "value": 9}],
+        "canchoose": true,
+        "counter": "",
+        "removeurl": "https://example.com/mod/choicegroup/view.php?id=3&action=delchoicegroup",
+        "message": ""
+    }
+}}
+<div class="mod_choicegroup-selection" id="{{uniqid}}" data-region="mod_choicegroup-selection">
+    <form method="post" action="{{actionurl}}" data-region="selection-form">
+        <input type="hidden" name="sesskey" value="{{sesskey}}">
+        <input type="hidden" name="id" value="{{cmid}}">
+        {{#instructions}}
+            <p class="mod_choicegroup-instructions" id="{{uniqid}}-instructions">{{instructions}}</p>
+        {{/instructions}}
+        {{#hastoolbar}}
+            <section class="mod_choicegroup-toolbar" aria-label="{{#str}}cardsearchandfilter, choicegroup{{/str}}">
+                <div class="mod_choicegroup-toolbar-fields">
+                    {{#search}}
+                        <div class="mod_choicegroup-toolbar-search">
+                            <label class="form-label" for="{{uniqid}}-search">{{#str}}cardsearch, choicegroup{{/str}}</label>
+                            <input class="form-control" type="search" id="{{uniqid}}-search" data-region="search" autocomplete="off">
+                        </div>
+                    {{/search}}
+                    {{#filters}}
+                        <div class="mod_choicegroup-toolbar-field">
+                            <label class="form-label" for="{{uniqid}}-filter-{{shortname}}">{{label}}</label>
+                            <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-filter-{{shortname}}" data-region="filter" data-shortname="{{shortname}}">
+                                <option value="">{{#str}}cardfilterall, choicegroup{{/str}}</option>
+                                {{#options}}
+                                    <option value="{{value}}">{{label}}</option>
+                                {{/options}}
+                            </select>
+                        </div>
+                    {{/filters}}
+                    {{#hassorts}}
+                        <div class="mod_choicegroup-toolbar-field">
+                            <label class="form-label" for="{{uniqid}}-sort">{{#str}}cardsort, choicegroup{{/str}}</label>
+                            <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-sort" data-region="sort">
+                                {{#sorts}}
+                                    <option value="{{value}}">{{label}}</option>
+                                {{/sorts}}
+                            </select>
+                        </div>
+                    {{/hassorts}}
+                </div>
+                <div class="mod_choicegroup-toolbar-line">
+                    {{#freefilter}}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="{{uniqid}}-free" data-region="onlyfree">
+                            <label class="form-check-label" for="{{uniqid}}-free">{{#str}}cardonlyfree, choicegroup{{/str}}</label>
+                        </div>
+                    {{/freefilter}}
+                    <span class="mod_choicegroup-toolbar-status" data-region="found" aria-live="polite">{{found}}</span>
+                    <button type="button" class="btn btn-link p-0" data-action="clear" hidden>{{#str}}cardclearfilters, choicegroup{{/str}}</button>
+                </div>
+            </section>
+        {{/hastoolbar}}
+        <fieldset class="mod_choicegroup-cards-fieldset"{{#instructions}} aria-describedby="{{uniqid}}-instructions"{{/instructions}}>
+            <legend class="visually-hidden">{{#str}}cardgroups, choicegroup{{/str}}</legend>
+            <div class="mod_choicegroup-cards" data-region="cards">
+                {{#cards}}
+                    {{> mod_choicegroup/card}}
+                {{/cards}}
+            </div>
+        </fieldset>
+        <p class="mod_choicegroup-empty" data-region="empty"{{^empty}} hidden{{/empty}}>{{#str}}cardnoresults, choicegroup{{/str}}</p>
+        <div class="mod_choicegroup-more">
+            <span data-region="shown">{{shown}}</span>
+            <button type="button" class="btn btn-outline-primary" data-action="more"{{^hasmore}} hidden{{/hasmore}}>{{#str}}cardloadmore, choicegroup{{/str}}</button>
+        </div>
+        <div data-region="kept">
+            {{#kept}}
+                <input type="hidden" name="{{name}}" value="{{value}}">
+            {{/kept}}
+        </div>
+        {{#canchoose}}
+            <div class="mod_choicegroup-savebar">
+                <div class="mod_choicegroup-savebar-status">
+                    <span data-region="counter">{{counter}}</span>
+                    <span class="mod_choicegroup-savebar-message" data-region="limit-message" hidden></span>
+                </div>
+                <div class="mod_choicegroup-savebar-actions">
+                    {{#removeurl}}
+                        <a href="{{removeurl}}">{{#str}}removemychoicegroup, choicegroup{{/str}}</a>
+                    {{/removeurl}}
+                    <button type="submit" class="btn btn-primary" data-region="save">{{#str}}savemychoicegroup, choicegroup{{/str}}</button>
+                </div>
+            </div>
+        {{/canchoose}}
+        {{#message}}
+            <p class="mod_choicegroup-message">{{message}}</p>
+        {{/message}}
+    </form>
+</div>

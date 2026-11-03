@@ -1,0 +1,85 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/card_details
+
+    The body of a group's details dialogue. The card keeps it in a template element and the dialogue copies it.
+
+    Context variables required for this template:
+    * picture - URL of the group picture, or empty
+    * description - the formatted group description (HTML), or empty
+    * seatsinfo - the seats, or false: text, status, haslimit, counts, percent, full, low
+    * hasfields, fields - the custom field values the activity shows here: label (plain), value (formatted HTML)
+    * members - the member list, or null: count, hidden, names (each with a plain name)
+
+    Example context (json):
+    {
+        "picture": "https://example.com/pluginfile.php/1/group/icon/1/f1",
+        "description": "<p>Tuesdays and Thursdays, with a final team project.</p>",
+        "seatsinfo": {"text": "18 of 30 seats taken", "status": "12 free", "haslimit": true, "counts": true,
+            "percent": 60, "full": false, "low": false},
+        "hasfields": true,
+        "fields": [{"label": "Shift", "value": "Evening"}],
+        "members": {"count": 2, "hidden": false, "names": [{"name": "Ana Souza"}, {"name": "Bruno Lima"}]}
+    }
+}}
+<div class="mod_choicegroup-details">
+    {{#picture}}
+        <img class="mod_choicegroup-details-picture" src="{{picture}}" alt="" width="72" height="72">
+    {{/picture}}
+    {{#description}}
+        <section class="mod_choicegroup-details-section">
+            <h3 class="h6">{{#str}}description, core{{/str}}</h3>
+            <div class="mod_choicegroup-details-description">{{{description}}}</div>
+        </section>
+    {{/description}}
+    {{#seatsinfo}}
+        <section class="mod_choicegroup-details-section">
+            <h3 class="h6">{{#str}}cardseats, choicegroup{{/str}}</h3>
+            <p class="mb-1">{{text}}{{#text}}{{#status}} · {{/status}}{{/text}}<span class="mod_choicegroup-seats-status{{#full}} is-full{{/full}}{{#low}} is-low{{/low}}">{{status}}</span></p>
+            {{#counts}}{{#haslimit}}
+                <span class="mod_choicegroup-seats-bar{{#full}} is-full{{/full}}" aria-hidden="true"><span style="width: {{percent}}%"></span></span>
+            {{/haslimit}}{{/counts}}
+        </section>
+    {{/seatsinfo}}
+    {{#hasfields}}
+        <section class="mod_choicegroup-details-section">
+            <h3 class="h6">{{#str}}cardinformation, choicegroup{{/str}}</h3>
+            <dl class="mod_choicegroup-details-fields">
+                {{#fields}}
+                    <dt>{{label}}</dt>
+                    <dd>{{{value}}}</dd>
+                {{/fields}}
+            </dl>
+        </section>
+    {{/hasfields}}
+    {{#members}}
+        <section class="mod_choicegroup-details-section">
+            <h3 class="h6">{{#str}}cardmemberslist, choicegroup, {{count}}{{/str}}</h3>
+            {{#hidden}}
+                <p>{{#str}}cardmembershidden, choicegroup{{/str}}</p>
+            {{/hidden}}
+            {{^hidden}}
+                <ul class="mod_choicegroup-details-members">
+                    {{#names}}
+                        <li>{{name}}</li>
+                    {{/names}}
+                </ul>
+            {{/hidden}}
+        </section>
+    {{/members}}
+</div>

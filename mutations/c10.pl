@@ -1,0 +1,1 @@
+s/        if \(!has_any_capability\(\['mod\/choicegroup:choose', 'mod\/choicegroup:readresponses'\], \$context\)\) \{\n            throw new \\required_capability_exception\(\$context, 'mod\/choicegroup:choose', 'nopermissions', ''\);\n        \}\n// or die "c10 did not match";

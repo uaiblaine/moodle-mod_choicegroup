@@ -54,8 +54,11 @@ if (!$choicegroup = choicegroup_get_choicegroup($cm->instance)) {
     throw new moodle_exception('invalidcoursemodule');
 }
 
-// Load real-time enrollment limit validator when min or max is configured.
-if ($choicegroup->multipleenrollmentspossible == 1) {
+// Load real-time enrollment limit validator when min or max is configured; the cards count on their own.
+if (
+    $choicegroup->multipleenrollmentspossible == 1 &&
+    (int)$choicegroup->selectionlayout !== \mod_choicegroup\local\selection::LAYOUT_CARDS
+) {
     $jsmin = (int)($choicegroup->minenrollments ?? 0);
     $jsmax = (int)($choicegroup->maxenrollments ?? 0);
     if ($jsmin > 0 || $jsmax > 0) {
@@ -96,16 +99,22 @@ choicegroup_view($choicegroup, $course, $cm, $context);
 // Submit any new data if there is any.
 if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') && confirm_sesskey()) {
     if ($choicegroup->multipleenrollmentspossible == 1) {
-        // The form posts one checkbox per option; a larger number posted by hand is capped to the options there are.
-        $numberofgroups = min(optional_param('number_of_groups', 0, PARAM_INT), count($choicegroup->option));
-        $enrollmentscount = 0;
-        $selectedoptionids = [];
+        if ((int)$choicegroup->selectionlayout === \mod_choicegroup\local\selection::LAYOUT_CARDS) {
+            // The cards post their option ids as answers[], the ones outside the loaded pages included.
+            $selectedoptionids = array_values(array_unique(optional_param_array('answers', [], PARAM_INT)));
+            $enrollmentscount = count($selectedoptionids);
+        } else {
+            // The form posts one checkbox per option; a larger number posted by hand is capped to the options there are.
+            $numberofgroups = min(optional_param('number_of_groups', 0, PARAM_INT), count($choicegroup->option));
+            $enrollmentscount = 0;
+            $selectedoptionids = [];
 
-        for ($i = 0; $i < $numberofgroups; $i++) {
-            $answervalue = optional_param('answer_' . $i, '', PARAM_INT);
-            if ($answervalue != '') {
-                $enrollmentscount++;
-                $selectedoptionids[] = (int)$answervalue;
+            for ($i = 0; $i < $numberofgroups; $i++) {
+                $answervalue = optional_param('answer_' . $i, '', PARAM_INT);
+                if ($answervalue != '') {
+                    $enrollmentscount++;
+                    $selectedoptionids[] = (int)$answervalue;
+                }
             }
         }
 
@@ -287,7 +296,10 @@ if ($choicegroup->timeclose != 0) {
 $options = choicegroup_prepare_options($choicegroup, $USER, $cm, $allresponses);
 $renderer = $PAGE->get_renderer('mod_choicegroup');
 
-if ((!$current || $choicegroup->allowupdate) && $choicegroupopen && is_enrolled($context, null, 'mod/choicegroup:choose')) {
+if ((int)$choicegroup->selectionlayout === \mod_choicegroup\local\selection::LAYOUT_CARDS) {
+    // The cards decide for themselves whether the viewer may choose (open, enrolled, allowupdate).
+    echo $renderer->display_selection_cards($choicegroup, $cm);
+} else if ((!$current || $choicegroup->allowupdate) && $choicegroupopen && is_enrolled($context, null, 'mod/choicegroup:choose')) {
     // They haven't made their choicegroup yet or updates allowed and choicegroup is open.
 
     echo $renderer->display_options(

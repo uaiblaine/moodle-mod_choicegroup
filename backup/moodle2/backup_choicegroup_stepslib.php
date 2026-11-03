@@ -41,7 +41,9 @@ class backup_choicegroup_activity_structure_step extends backup_activity_structu
             'multipleenrollmentspossible', 'maxenrollments', 'minenrollments',
             'showresults', 'display', 'allowupdate', 'showunanswered',
             'limitanswers', 'timeopen', 'timeclose', 'timemodified',
-            'completionsubmit', 'sortgroupsby', 'onlyactive', 'defaultgroupdescriptionstate', ]);
+            'completionsubmit', 'sortgroupsby', 'onlyactive', 'defaultgroupdescriptionstate',
+            'selectionlayout', 'cardsperpage', 'searchmode', 'filterfreeseats', 'picturecard', 'picturemodal',
+            'modaldescription', 'modalseats', 'modalmembers', 'cardfields', ]);
 
         $options = new backup_nested_element('options');
 
