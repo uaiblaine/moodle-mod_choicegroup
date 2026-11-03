@@ -162,4 +162,24 @@ final class get_cards_test extends \advanced_testcase {
         $this->assertSame(0, $response['data']['total']);
         $this->assertSame([], $response['data']['cards']);
     }
+
+    /**
+     * The grouping argument narrows the page when the activity offers the grouping filter.
+     *
+     * @return void
+     */
+    public function test_grouping_narrows_the_page(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$course, $module, $groups] = $this->create_fixture();
+        $grouping = $this->getDataGenerator()->create_grouping(['courseid' => $course->id]);
+        groups_assign_grouping($grouping->id, $groups[1]->id);
+        $DB->set_field('choicegroup', 'filtergrouping', 1, ['id' => $module->id]);
+        $this->setUser($this->getDataGenerator()->create_and_enrol($course, 'student'));
+
+        $response = self::call(['cmid' => $module->cmid, 'grouping' => (int)$grouping->id]);
+        $this->assertFalse($response['error'], json_encode($response));
+        $this->assertSame(1, $response['data']['total']);
+        $this->assertStringContainsString('Beta', $response['data']['cards'][0]['html']);
+    }
 }

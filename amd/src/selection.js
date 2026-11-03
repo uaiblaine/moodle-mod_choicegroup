@@ -40,6 +40,11 @@ const SELECTORS = {
     search: '[data-region="search"]',
     filter: '[data-region="filter"]',
     sort: '[data-region="sort"]',
+    grouping: '[data-region="grouping"]',
+    toolbar: '[data-region="toolbar"]',
+    filterCount: '[data-region="filter-count"]',
+    chips: '[data-region="chips"]',
+    toggle: '[data-action="toggle-filters"]',
     onlyfree: '[data-region="onlyfree"]',
     found: '[data-region="found"]',
     shown: '[data-region="shown"]',
@@ -81,6 +86,7 @@ const debounce = (callback, delay) => {
  * @param {number} config.perpage Cards per load
  * @param {number} config.total Matches of the first load
  * @param {number[]} config.chosen The viewer's stored choices
+ * @param {Object[]} config.chosennames The stored choices' optionid and name, for the chips of several choices
  * @param {boolean} config.canchoose The viewer may choose now
  * @param {boolean} config.remote The web service may be called (not for guests)
  */
@@ -93,6 +99,7 @@ export const init = (rootid, config) => {
     const cards = root.querySelector(SELECTORS.cards);
     const form = root.querySelector(SELECTORS.form);
     const selected = new Set(config.chosen.map(Number));
+    const names = new Map(config.chosennames.map((choice) => [Number(choice.optionid), choice.name]));
     let total = config.total;
     let request = 0;
 
@@ -123,6 +130,35 @@ export const init = (rootid, config) => {
     };
 
     /**
+     * List the choices as chips, each with a button that removes it; the cards outside the page included.
+     */
+    const renderChips = async() => {
+        const list = root.querySelector(SELECTORS.chips);
+        if (!list) {
+            return;
+        }
+
+        const items = await Promise.all([...selected].map(async(id) => {
+            const name = names.get(id) || '';
+            const item = document.createElement('li');
+            const label = document.createElement('span');
+            const remove = document.createElement('button');
+            item.className = 'mod_choicegroup-chip';
+            label.textContent = name;
+            remove.type = 'button';
+            remove.className = 'mod_choicegroup-chip-remove';
+            remove.dataset.action = 'remove-chip';
+            remove.dataset.optionid = id;
+            remove.setAttribute('aria-label', await getString('cardremovechip', 'mod_choicegroup', name));
+            remove.textContent = '×';
+            item.append(label, remove);
+            return item;
+        }));
+        list.replaceChildren(...items);
+        list.hidden = items.length === 0;
+    };
+
+    /**
      * Update the counter and the limit message, and block the save while the selection breaks a limit.
      */
     const updateCounter = async() => {
@@ -143,7 +179,10 @@ export const init = (rootid, config) => {
 
         save.disabled = key !== '';
         const message = root.querySelector(SELECTORS.message);
-        root.querySelector(SELECTORS.counter).textContent = await getString('cardselected', 'mod_choicegroup', count);
+        root.querySelector(SELECTORS.counter).textContent = config.max > 0
+            ? await getString('cardselectedmax', 'mod_choicegroup', {count, max: config.max})
+            : await getString('cardselected', 'mod_choicegroup', count);
+        await renderChips();
         message.hidden = key === '';
         message.textContent = key ? await getString(key, 'mod_choicegroup', value) : '';
     };
@@ -157,6 +196,7 @@ export const init = (rootid, config) => {
         const search = root.querySelector(SELECTORS.search);
         const sort = root.querySelector(SELECTORS.sort);
         const onlyfree = root.querySelector(SELECTORS.onlyfree);
+        const grouping = root.querySelector(SELECTORS.grouping);
         const filters = [];
         root.querySelectorAll(SELECTORS.filter).forEach((select) => {
             if (select.value !== '') {
@@ -169,6 +209,7 @@ export const init = (rootid, config) => {
             filters: filters,
             onlyfree: onlyfree ? onlyfree.checked : false,
             sort: sort ? sort.value : 'default',
+            grouping: grouping ? Number(grouping.value) : 0,
         };
     };
 
@@ -180,15 +221,23 @@ export const init = (rootid, config) => {
         const toolbar = readToolbar();
         const found = root.querySelector(SELECTORS.found);
         if (found) {
-            found.textContent = await getString('cardfound', 'mod_choicegroup', total);
+            found.textContent = total === 1
+                ? await getString('cardfoundone', 'mod_choicegroup')
+                : await getString('cardfound', 'mod_choicegroup', total);
         }
 
         root.querySelector(SELECTORS.shown).textContent = await getString('cardshown', 'mod_choicegroup', {shown, total});
         root.querySelector(SELECTORS.more).hidden = shown >= total;
         root.querySelector(SELECTORS.empty).hidden = total > 0;
+        const active = toolbar.filters.length + (toolbar.onlyfree ? 1 : 0) + (toolbar.grouping ? 1 : 0);
         const clear = root.querySelector(SELECTORS.clear);
         if (clear) {
-            clear.hidden = toolbar.query === '' && toolbar.filters.length === 0 && !toolbar.onlyfree;
+            clear.hidden = toolbar.query === '' && active === 0;
+        }
+        const count = root.querySelector(SELECTORS.filterCount);
+        if (count) {
+            count.hidden = active === 0;
+            count.textContent = active ? await getString('cardfilterscount', 'mod_choicegroup', active) : '';
         }
     };
 
@@ -271,6 +320,7 @@ export const init = (rootid, config) => {
         }
         if (input.checked) {
             selected.add(id);
+            names.set(id, input.closest(SELECTORS.card).querySelector(SELECTORS.name).textContent);
         } else {
             selected.delete(id);
         }
@@ -282,6 +332,22 @@ export const init = (rootid, config) => {
         const details = e.target.closest(SELECTORS.detailsButton);
         if (details) {
             openDetails(details.closest(SELECTORS.card));
+            return;
+        }
+
+        const chip = e.target.closest('[data-action="remove-chip"]');
+        if (chip) {
+            selected.delete(Number(chip.dataset.optionid));
+            syncInputs();
+            updateCounter();
+            return;
+        }
+
+        const toggle = e.target.closest(SELECTORS.toggle);
+        if (toggle) {
+            const open = toggle.getAttribute('aria-expanded') !== 'true';
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            root.querySelector(SELECTORS.toolbar).classList.toggle('is-filters-open', open);
             return;
         }
 
@@ -302,6 +368,10 @@ export const init = (rootid, config) => {
             root.querySelectorAll(SELECTORS.filter).forEach((select) => {
                 select.value = '';
             });
+            const grouping = root.querySelector(SELECTORS.grouping);
+            if (grouping) {
+                grouping.value = '0';
+            }
             load(false);
         }
     });
@@ -311,15 +381,16 @@ export const init = (rootid, config) => {
         if (search) {
             search.addEventListener('input', debounce(() => load(false), 300));
         }
-        root.querySelectorAll(`${SELECTORS.filter}, ${SELECTORS.sort}, ${SELECTORS.onlyfree}`).forEach((control) => {
-            control.addEventListener('change', () => load(false));
-        });
+        root.querySelectorAll(`${SELECTORS.filter}, ${SELECTORS.sort}, ${SELECTORS.onlyfree}, ${SELECTORS.grouping}`)
+            .forEach((control) => {
+                control.addEventListener('change', () => load(false));
+            });
     } else {
         // Guests see the first page only: the web service refuses them.
-        root.querySelectorAll(`${SELECTORS.search}, ${SELECTORS.filter}, ${SELECTORS.sort}, ${SELECTORS.onlyfree}`)
-            .forEach((control) => {
-                control.disabled = true;
-            });
+        const controls = [SELECTORS.search, SELECTORS.filter, SELECTORS.sort, SELECTORS.onlyfree, SELECTORS.grouping];
+        root.querySelectorAll(controls.join(', ')).forEach((control) => {
+            control.disabled = true;
+        });
         root.querySelector(SELECTORS.more).hidden = true;
     }
 

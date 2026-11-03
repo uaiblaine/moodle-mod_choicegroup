@@ -27,10 +27,14 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
   custom fields the activity picks, an "only groups with free seats" filter, sorting, "Load more"
   and a details dialogue that can choose the group. Search, filters and paging run on the server
   through the new `mod_choicegroup_get_cards` web service. Existing activities keep the table.
+- Card layout, second round: on a phone the filters fold behind a "Filters" button that counts the
+  active ones; with several choices the save bar lists the chosen groups as chips that remove them
+  and counts against the maximum; an optional filter by grouping (*Offer a filter by grouping*);
+  singular strings for one group found and one member.
 
 ### Changed
 
-- Version 2026110301 (ten `choicegroup` columns for the selection page settings).
+- Version 2026110302 (eleven `choicegroup` columns for the selection page settings).
 - The submit web service refuses a change of choice with `updatenotallowed` (it threw
   `missingrequiredcapability`).
 - Group choice strings in sentence case.
@@ -61,6 +65,9 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
   strips tabs and line breaks from cells.
 
 ### Fixed
+
+- Saving several choices redirects with "Your choice has been saved", as a single choice does: the page
+  showed the selection from before the save, and a reload posted the set again.
 
 - Backup carries `minenrollments`, `maxenrollments` and `defaultgroupdescriptionstate`; restore
   maps option groups through the backup's group mapping first.

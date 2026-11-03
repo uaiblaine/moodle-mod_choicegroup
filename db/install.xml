@@ -31,6 +31,7 @@
         <FIELD NAME="cardsperpage" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="25" SEQUENCE="false" COMMENT="Cards loaded at a time in the card layout"/>
         <FIELD NAME="searchmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Search by name in the card layout: 0 automatic, 1 always, 2 never"/>
         <FIELD NAME="filterfreeseats" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Offer the only-groups-with-seats filter when answers are limited"/>
+        <FIELD NAME="filtergrouping" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Offer a filter by the groupings of the offered groups"/>
         <FIELD NAME="picturecard" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Show the group picture on the card"/>
         <FIELD NAME="picturemodal" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Show the group picture in the details dialogue"/>
         <FIELD NAME="modaldescription" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Show the group description in the details dialogue"/>

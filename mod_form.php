@@ -363,6 +363,9 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         $mform->addElement('advcheckbox', 'filterfreeseats', get_string('filterfreeseats', 'choicegroup'));
         $mform->setDefault('filterfreeseats', 1);
 
+        $mform->addElement('advcheckbox', 'filtergrouping', get_string('filtergrouping', 'choicegroup'));
+        $mform->addHelpButton('filtergrouping', 'filtergrouping', 'choicegroup');
+
         $sitefields = selection::get_site_fields();
         if (!$sitefields) {
             $mform->addElement(

@@ -318,7 +318,8 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
         $filters = $selection->get_filters();
         $search = $selection->has_search();
         $freefilter = $selection->has_free_filter();
-        $hastoolbar = $search || $filters || $freefilter;
+        $groupings = $selection->get_groupings();
+        $hastoolbar = $search || $filters || $freefilter || $groupings;
         $sorts = [];
         if ($hastoolbar) {
             foreach ($selection->get_sort_keys() as $key) {
@@ -357,12 +358,17 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
             'instructions' => $multiple ? '' : get_string('cardchooseone', 'choicegroup'),
             'hastoolbar' => $hastoolbar,
             'search' => $search,
+            'haspanel' => $filters || $groupings || $freefilter || count($sorts) > 1,
             'filters' => $filters,
+            'hasgroupings' => (bool)$groupings,
+            'groupings' => $groupings,
+            'multiple' => $multiple,
             'hassorts' => count($sorts) > 1,
             'sorts' => $sorts,
             'freefilter' => $freefilter,
             'cards' => $page['cards'],
-            'found' => get_string('cardfound', 'choicegroup', $page['total']),
+            'found' => $page['total'] === 1 ? get_string('cardfoundone', 'choicegroup') :
+                get_string('cardfound', 'choicegroup', $page['total']),
             'shown' => get_string('cardshown', 'choicegroup', (object)[
                 'shown' => count($page['cards']),
                 'total' => $page['total'],
@@ -371,10 +377,16 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
             'empty' => $page['total'] === 0,
             'kept' => $kept,
             'canchoose' => $canchoose,
-            'counter' => $multiple ? get_string('cardselected', 'choicegroup', $chosen) : '',
+            'counter' => $multiple ? self::selection_counter($chosen, (int)($choicegroup->maxenrollments ?? 0)) : '',
             'removeurl' => $removeurl,
             'message' => $message,
         ];
+
+        // The chips of the save bar name the stored choices, the ones on unloaded pages included.
+        $chosennames = [];
+        foreach ($selection->get_chosen() as $optionid) {
+            $chosennames[] = ['optionid' => $optionid, 'name' => $selection->get_option_name($optionid)];
+        }
 
         $this->page->requires->js_call_amd('mod_choicegroup/selection', 'init', [$data['uniqid'], [
             'cmid' => (int)$cm->id,
@@ -384,11 +396,27 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
             'perpage' => $perpage,
             'total' => $page['total'],
             'chosen' => $selection->get_chosen(),
+            'chosennames' => $multiple ? $chosennames : [],
             'canchoose' => $canchoose,
             'remote' => isloggedin() && !isguestuser(),
         ]]);
 
         return $this->render_from_template('mod_choicegroup/selection_page', $data);
+    }
+
+    /**
+     * The save bar's count of chosen groups, against the maximum when there is one.
+     *
+     * @param int $count Groups chosen
+     * @param int $max The most the activity allows, 0 for no maximum
+     * @return string
+     */
+    private static function selection_counter(int $count, int $max): string {
+        if ($max > 0) {
+            return get_string('cardselectedmax', 'choicegroup', (object)['count' => $count, 'max' => $max]);
+        }
+
+        return get_string('cardselected', 'choicegroup', $count);
     }
 
     /**

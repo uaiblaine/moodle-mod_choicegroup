@@ -24,7 +24,9 @@
     * uniqid - prefix of the element ids
     * actionurl, sesskey, cmid - the form
     * instructions - what to choose, plain text
-    * hastoolbar, search, filters, hassorts, sorts, freefilter - the toolbar; each filter has shortname, label and options
+    * hastoolbar, search, haspanel, filters, hasgroupings, groupings, hassorts, sorts, freefilter - the toolbar; each filter
+      has shortname, label and options; each grouping id and name (plain)
+    * multiple - several choices allowed: the save bar lists them as chips
     * cards - the first page, each the context of mod_choicegroup/card
     * found, shown, hasmore, empty - the counts under the cards, plain text
     * kept - hidden inputs for the viewer's choices outside the first page: name and value
@@ -40,6 +42,10 @@
         "instructions": "Choose one group.",
         "hastoolbar": true,
         "search": true,
+        "haspanel": true,
+        "hasgroupings": true,
+        "groupings": [{"id": 4, "name": "Evening classes"}],
+        "multiple": false,
         "filters": [{"shortname": "shift", "label": "Shift", "options": [{"value": "1", "label": "Morning"}]}],
         "hassorts": true,
         "sorts": [{"value": "default", "label": "Activity order"}, {"value": "name", "label": "Name"}],
@@ -67,43 +73,66 @@
             <p class="mod_choicegroup-instructions" id="{{uniqid}}-instructions">{{instructions}}</p>
         {{/instructions}}
         {{#hastoolbar}}
-            <section class="mod_choicegroup-toolbar" aria-label="{{#str}}cardsearchandfilter, choicegroup{{/str}}">
-                <div class="mod_choicegroup-toolbar-fields">
+            <section class="mod_choicegroup-toolbar" data-region="toolbar" aria-label="{{#str}}cardsearchandfilter, choicegroup{{/str}}">
+                <div class="mod_choicegroup-toolbar-top">
                     {{#search}}
                         <div class="mod_choicegroup-toolbar-search">
                             <label class="form-label" for="{{uniqid}}-search">{{#str}}cardsearch, choicegroup{{/str}}</label>
                             <input class="form-control" type="search" id="{{uniqid}}-search" data-region="search" autocomplete="off">
                         </div>
                     {{/search}}
-                    {{#filters}}
-                        <div class="mod_choicegroup-toolbar-field">
-                            <label class="form-label" for="{{uniqid}}-filter-{{shortname}}">{{label}}</label>
-                            <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-filter-{{shortname}}" data-region="filter" data-shortname="{{shortname}}">
-                                <option value="">{{#str}}cardfilterall, choicegroup{{/str}}</option>
-                                {{#options}}
-                                    <option value="{{value}}">{{label}}</option>
-                                {{/options}}
-                            </select>
-                        </div>
-                    {{/filters}}
-                    {{#hassorts}}
-                        <div class="mod_choicegroup-toolbar-field">
-                            <label class="form-label" for="{{uniqid}}-sort">{{#str}}cardsort, choicegroup{{/str}}</label>
-                            <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-sort" data-region="sort">
-                                {{#sorts}}
-                                    <option value="{{value}}">{{label}}</option>
-                                {{/sorts}}
-                            </select>
-                        </div>
-                    {{/hassorts}}
+                    {{#haspanel}}
+                        <button type="button" class="btn btn-outline-primary mod_choicegroup-filters-toggle" data-action="toggle-filters" aria-expanded="false" aria-controls="{{uniqid}}-filters">
+                            {{#str}}cardfilters, choicegroup{{/str}}
+                            <span class="mod_choicegroup-filters-count" data-region="filter-count" hidden></span>
+                        </button>
+                    {{/haspanel}}
                 </div>
-                <div class="mod_choicegroup-toolbar-line">
-                    {{#freefilter}}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="{{uniqid}}-free" data-region="onlyfree">
-                            <label class="form-check-label" for="{{uniqid}}-free">{{#str}}cardonlyfree, choicegroup{{/str}}</label>
+                {{#haspanel}}
+                    <div class="mod_choicegroup-filters-panel" id="{{uniqid}}-filters" data-region="filters-panel">
+                        <div class="mod_choicegroup-toolbar-fields">
+                            {{#filters}}
+                                <div class="mod_choicegroup-toolbar-field">
+                                    <label class="form-label" for="{{uniqid}}-filter-{{shortname}}">{{label}}</label>
+                                    <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-filter-{{shortname}}" data-region="filter" data-shortname="{{shortname}}">
+                                        <option value="">{{#str}}cardfilterall, choicegroup{{/str}}</option>
+                                        {{#options}}
+                                            <option value="{{value}}">{{label}}</option>
+                                        {{/options}}
+                                    </select>
+                                </div>
+                            {{/filters}}
+                            {{#hasgroupings}}
+                                <div class="mod_choicegroup-toolbar-field">
+                                    <label class="form-label" for="{{uniqid}}-grouping">{{#str}}grouping, group{{/str}}</label>
+                                    <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-grouping" data-region="grouping">
+                                        <option value="0">{{#str}}cardfilterall, choicegroup{{/str}}</option>
+                                        {{#groupings}}
+                                            <option value="{{id}}">{{name}}</option>
+                                        {{/groupings}}
+                                    </select>
+                                </div>
+                            {{/hasgroupings}}
+                            {{#hassorts}}
+                                <div class="mod_choicegroup-toolbar-field">
+                                    <label class="form-label" for="{{uniqid}}-sort">{{#str}}cardsort, choicegroup{{/str}}</label>
+                                    <select class="form-select mod_choicegroup-toolbar-select" id="{{uniqid}}-sort" data-region="sort">
+                                        {{#sorts}}
+                                            <option value="{{value}}">{{label}}</option>
+                                        {{/sorts}}
+                                    </select>
+                                </div>
+                            {{/hassorts}}
                         </div>
-                    {{/freefilter}}
+                        {{#freefilter}}
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="{{uniqid}}-free" data-region="onlyfree">
+                                <label class="form-check-label" for="{{uniqid}}-free">{{#str}}cardonlyfree, choicegroup{{/str}}</label>
+                            </div>
+                        {{/freefilter}}
+                    </div>
+                {{/haspanel}}
+                <div class="mod_choicegroup-toolbar-line">
                     <span class="mod_choicegroup-toolbar-status" data-region="found" aria-live="polite">{{found}}</span>
                     <button type="button" class="btn btn-link p-0" data-action="clear" hidden>{{#str}}cardclearfilters, choicegroup{{/str}}</button>
                 </div>
@@ -131,6 +160,9 @@
             <div class="mod_choicegroup-savebar">
                 <div class="mod_choicegroup-savebar-status">
                     <span data-region="counter">{{counter}}</span>
+                    {{#multiple}}
+                        <ul class="mod_choicegroup-chips" data-region="chips" aria-label="{{#str}}yourselection, choicegroup{{/str}}"></ul>
+                    {{/multiple}}
                     <span class="mod_choicegroup-savebar-message" data-region="limit-message" hidden></span>
                 </div>
                 <div class="mod_choicegroup-savebar-actions">

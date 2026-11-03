@@ -162,5 +162,17 @@ function xmldb_choicegroup_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026110301, 'choicegroup');
     }
 
+    if ($oldversion < 2026110302) {
+        // The grouping filter of the card layout.
+        $table = new xmldb_table('choicegroup');
+        $field = new xmldb_field('filtergrouping', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'filterfreeseats');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Choicegroup savepoint reached.
+        upgrade_mod_savepoint(true, 2026110302, 'choicegroup');
+    }
+
     return true;
 }

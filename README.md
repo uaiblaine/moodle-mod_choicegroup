@@ -42,7 +42,9 @@ Under *Selection page* in the activity settings, *Show the groups as* picks the 
   group picture, the seats and the custom field values the activity chooses to show. The cards load
   a page at a time (10, 25, 50 or 100) with "Load more"; a search by name (automatic from 10 groups,
   always or never), one filter per chosen group custom field, an "only groups with free seats"
-  filter and a sort order narrow them on the server. A *Details* button on each card opens a
+  filter, an optional grouping filter and a sort order narrow them on the server; on a phone the
+  filters fold behind a "Filters" button. With several choices allowed, the save bar lists the
+  chosen groups as chips, each with a button that removes it. A *Details* button on each card opens a
   dialogue with the description, the seats, the chosen field values and the member list, and offers
   to choose the group.
 - **A table**: the layout of earlier versions, which existing activities keep until a teacher
