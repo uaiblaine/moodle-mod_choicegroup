@@ -24,7 +24,7 @@
  */
 
 /**
- * Define the complete url structure for backup, with file and id annotations
+ * Define the complete choicegroup structure for backup, with file and id annotations
  */
 class backup_choicegroup_activity_structure_step extends backup_activity_structure_step {
     /**
@@ -38,10 +38,10 @@ class backup_choicegroup_activity_structure_step extends backup_activity_structu
         // Define each element separated.
         $choicegroup = new backup_nested_element('choicegroup', ['id'], [
             'name', 'intro', 'introformat', 'publish',
-            'multipleenrollmentspossible',
+            'multipleenrollmentspossible', 'maxenrollments', 'minenrollments',
             'showresults', 'display', 'allowupdate', 'showunanswered',
             'limitanswers', 'timeopen', 'timeclose', 'timemodified',
-            'completionsubmit', 'sortgroupsby', 'onlyactive', ]);
+            'completionsubmit', 'sortgroupsby', 'onlyactive', 'defaultgroupdescriptionstate', ]);
 
         $options = new backup_nested_element('options');
 

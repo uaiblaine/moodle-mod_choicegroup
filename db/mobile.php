@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Choice group module capability definition
+ * Moodle App add-on definition for mod_choicegroup
  *
  * @package    mod_choicegroup
  * @copyright  2018 Sara Arjona <sara@moodle.com>

@@ -27,7 +27,7 @@ use core_courseformat\local\overview\overviewitem;
 use mod_choicegroup\manager;
 
 /**
- * Fair Allocation overview integration (for Moodle 5.1+)
+ * mod_choicegroup course overview integration (for Moodle 5.1+)
  *
  * @package   mod_choicegroup
  * @copyright 2025 Luca Bösch <luca.boesch@bfh.ch>
@@ -59,9 +59,9 @@ class overview extends \core_courseformat\activityoverviewbase {
     }
 
     /**
-     * Get the rating begins at date overview item.
+     * Get the opening date overview item.
      *
-     * @return overviewitem|null
+     * @return overviewitem Never null: an item with a dash when the activity has no such date
      * @throws \coding_exception
      */
     public function get_extra_timerestrictstart_overview(): ?overviewitem {
@@ -94,9 +94,9 @@ class overview extends \core_courseformat\activityoverviewbase {
     }
 
     /**
-     * Get the rating ends at date overview item.
+     * Get the closing date overview item.
      *
-     * @return overviewitem|null
+     * @return overviewitem Never null: an item with a dash when the activity has no such date
      * @throws \coding_exception
      */
     public function get_extra_timerestrictstop_overview(): ?overviewitem {
@@ -127,6 +127,11 @@ class overview extends \core_courseformat\activityoverviewbase {
         );
     }
 
+    /**
+     * Get the extra overview items: the opening and closing dates, the responses count and the user's status.
+     *
+     * @return array Overview items keyed by their column name; an item is null when the viewer lacks the capability behind it
+     */
     #[\Override]
     public function get_extra_overview_items(): array {
         return [
@@ -175,7 +180,7 @@ class overview extends \core_courseformat\activityoverviewbase {
     /**
      * Retrieves an overview of responses for the choicegroup.
      *
-     * @return overviewitem|null An overview item c, or null if the user lacks the required capability.
+     * @return overviewitem|null An overview item, or null if the user lacks the required capability.
      */
     private function get_extra_responses_overview(): ?overviewitem {
         global $USER;

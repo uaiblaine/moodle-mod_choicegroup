@@ -32,21 +32,23 @@ function xmldb_choicegroup_upgrade($oldversion) {
     global $CFG, $DB;
 
     $dbman = $DB->get_manager();
+    if ($oldversion < 2012042500) {
+        // Remove the no longer needed choicegroup_answers DB table.
+        $choicegroupanswers = new xmldb_table('choicegroup_answers');
+        $dbman->drop_table($choicegroupanswers);
+
+        // Change the choicegroup_options.text (text) field as choicegroup_options.groupid (int).
+        $choicegroupoptions = new xmldb_table('choicegroup_options');
+        $fieldtext = new xmldb_field('text', XMLDB_TYPE_TEXT, 'small', null, null, null, null, 'choicegroupid');
+        $fieldgroupid = new xmldb_field('groupid', XMLDB_TYPE_INTEGER, '10', null, null, null, '0', 'choicegroupid');
+
+        $dbman->rename_field($choicegroupoptions, $fieldtext, 'groupid');
+        $dbman->change_field_type($choicegroupoptions, $fieldgroupid);
+
+        upgrade_mod_savepoint(true, 2012042500, 'choicegroup');
+    }
+
     if ($oldversion < 2013070900) {
-        if ($oldversion < 2012042500) {
-            // Remove the no longer needed choicegroup_answers DB table.
-            $choicegroupanswers = new xmldb_table('choicegroup_answers');
-            $dbman->drop_table($choicegroupanswers);
-
-            // Change the choicegroup_options.text (text) field as choicegroup_options.groupid (int).
-            $choicegroupoptions = new xmldb_table('choicegroup_options');
-            $fieldtext = new xmldb_field('text', XMLDB_TYPE_TEXT, 'small', null, null, null, null, 'choicegroupid');
-            $fieldgroupid = new xmldb_field('groupid', XMLDB_TYPE_INTEGER, '10', null, null, null, '0', 'choicegroupid');
-
-            $dbman->rename_field($choicegroupoptions, $fieldtext, 'groupid');
-            $dbman->change_field_type($choicegroupoptions, $fieldgroupid);
-        }
-
         // Define table choicegroup to be created.
         $table = new xmldb_table('choicegroup');
 
@@ -94,7 +96,7 @@ function xmldb_choicegroup_upgrade($oldversion) {
             $dbman->add_field($table, $field);
         }
 
-        // Group choice savepoint reached.
+        // Choicegroup savepoint reached.
         upgrade_mod_savepoint(true, 2021080500, 'choicegroup');
     }
 

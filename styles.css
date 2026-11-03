@@ -207,7 +207,7 @@
 
 .path-mod-choicegroup div.tablecontainer table {
     width: 100%;
-    border-collapse: unset !important;
+    border-collapse: unset;
 }
 
 .path-mod-choicegroup table.choicegroups td {
@@ -265,7 +265,7 @@
     text-align: center;
 }
 
-/* Styles to format the Choices table. */
+/* Styles to format the choicegroup table. */
 .path-mod-choicegroup .width10 {
     width: 10%;
 }

@@ -1,41 +1,90 @@
-General information
-====================
+# Group choice (mod_choicegroup)
 
-[![Moodle Plugin CI](https://github.com/ndunand/moodle-mod_choicegroup/actions/workflows/moodle-plugin-ci.yml/badge.svg?branch=master)](https://github.com/ndunand/moodle-mod_choicegroup/actions/workflows/moodle-plugin-ci.yml)
+An activity module that lets students put themselves into one of a course's groups. The teacher
+picks which groups are offered and, optionally, the maximum (and minimum) number of members per
+group, an opening and a closing date, and whether a choice may be changed later.
 
-This module allows students to enrol themselves in a group within a course. The teacher can choose from which groups the students can chose, and the maximum nummber of students allowed in each group.
+Students can see the members of each group before choosing (when the teacher shows them and the
+group's visibility allows it). Choosing a group adds the student to that course group; changing
+the choice removes them from the previous group and adds them to the new one. With multiple
+enrolments allowed, a student may join several of the offered groups.
 
-The students can view the members of each group before making a choise, and (if the teacher allows it) change their selected group until the deadline.
+The module is based on core's Choice activity and behaves much like it.
 
-This module is heavily based on the "choice" activity module, and behaves roughly like it. Making a choice enrols you in a group, changing your choice unenrols you from the precedent group and enrols you in the new one, and so on.
+This repository is a fork of [ndunand/moodle-mod_choicegroup](https://github.com/ndunand/moodle-mod_choicegroup)
+maintained for **Moodle 5.3** (`$plugin->supported = [503, 503]`) on the `MOODLE_503_STABLE`
+branch. It carries security and correctness fixes over upstream; see `CHANGELOG.md`.
 
+## Requirements
 
-Installation
-=============
+- Moodle 5.3 (`$plugin->requires = 2026100500`).
+- No other plugin. The course must have groups for the activity to offer.
 
-1. unzip, and copy into Moodle's /mod folder
-2. visit administration page to install module
-3. use in any course as wished
+## Installation
 
+1. Copy the plugin into `mod/choicegroup` (on 5.3, `public/mod/choicegroup`), or install the zip
+   from *Site administration > Plugins > Install plugins*.
+2. Visit *Site administration > Notifications* to finish the installation.
 
-Operation
-==========
+No post-install step and no external service.
 
-1. create groups within your course
-2. create a choicegroup activity and select groups which users can chose from
+## Use
 
+1. Create the groups in the course.
+2. Add a *Group choice* activity and select the groups students may choose from; set the limits,
+   dates and display options.
 
-See also
-=========
+## Data the plugin keeps
 
- - [Moodle plugins entry page](http://moodle.org/plugins/view.php?plugin=mod_choicegroup)
- - [Moodle.org forum discussion thread](http://moodle.org/mod/forum/discuss.php?d=174424)
- - [Moodlefairy's review](http://www.youtube.com/watch?v=JQFaDLtHZdY)
- - [Another review by Gavin Henrick](http://www.somerandomthoughts.com/blog/2011/10/13/review-activity-module-choice-group-for-moodle-2/)
+| Table | What it keeps | How long |
+|---|---|---|
+| `choicegroup` | One row per activity: name, intro, the display, limit, date and completion settings. No user data. | Until the activity is deleted. |
+| `choicegroup_options` | One row per offered group: the activity, the course group id and that group's member limit. No user data. | Until the option or the activity is deleted. |
 
+A student's choice is not stored by the plugin: it **is** the student's membership of the course
+group (core table `groups_members`), written through core's group API with an empty component, so
+those rows belong to core's group subsystem under the Privacy API. Consequences:
 
-Thanks to
-==========
+- The plugin's privacy provider is a null provider: core_group exports and deletes the
+  memberships.
+- Deleting the activity, or resetting the course, leaves the memberships in place; use core's
+  "Remove all group members" in the course reset form to clear them.
+- Course backups carry the choices only when they include groups and group members.
 
- - André Lausch : German translation
- - Luiggi Sansonetti : French translation
+Events (choice made, choice removed, report viewed, module viewed) go to the site's log stores
+with the acting user and, for choice changes, the affected user.
+
+## Capabilities
+
+| Capability | Default roles | Purpose |
+|---|---|---|
+| `mod/choicegroup:addinstance` | editing teacher, manager | Add a group choice activity to a course. |
+| `mod/choicegroup:choose` | student, teacher, editing teacher | Choose a group (only users enrolled in the course). |
+| `mod/choicegroup:readresponses` | teacher, editing teacher, manager | See who chose which group. |
+| `mod/choicegroup:deleteresponses` | teacher, editing teacher, manager | Remove a student's choice (their group membership). |
+| `mod/choicegroup:downloadresponses` | teacher, editing teacher, manager | Download the responses (ODS, Excel, text). |
+
+## Settings
+
+*Site administration > Plugins > Activity modules > Group choice*:
+
+- `choicegroup/sortgroupsby`: default order of the groups on the activity page (creation date or
+  name).
+- `choicegroup/defaultgroupdescriptionstate`: whether group descriptions start shown or hidden.
+
+## Moodle App
+
+The activity works in the Moodle App through the plugin's mobile handler (`db/mobile.php`) and its
+web services (`mod_choicegroup_get_choicegroup_options`, `mod_choicegroup_submit_choicegroup_response`,
+`mod_choicegroup_delete_choicegroup_responses`, `mod_choicegroup_view_choicegroup`).
+
+## Licence
+
+GNU GPL v3 or later; see `LICENSE`. Original work © Université de Lausanne and contributors.
+
+## Credits
+
+- Nicolas Dunand and the Université de Lausanne, original authors and upstream maintainers.
+- André Lausch: German translation. Luiggi Sansonetti: French translation.
+- Upstream links: [plugins directory entry](https://moodle.org/plugins/mod_choicegroup),
+  [forum discussion](https://moodle.org/mod/forum/discuss.php?d=174424).

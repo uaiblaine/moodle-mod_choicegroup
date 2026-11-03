@@ -47,7 +47,7 @@ Feature: Use the choicegroup activity with groups within groupings
     And I set the following fields to these values:
       | Group choice name | Choose your group        |
       | Description       | Group choice description |
-    And I press "Expand All Groupings"
+    And I press "Expand all groupings"
     And I should see "X"
     And I should see "Y"
     And I should see "A"
@@ -58,4 +58,3 @@ Feature: Use the choicegroup activity with groups within groupings
     # Student view.
     When I am on the "Choose your group" "choicegroup activity" page logged in as student1
     Then I should see "A"
-

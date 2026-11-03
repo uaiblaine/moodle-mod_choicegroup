@@ -1,0 +1,1 @@
+s/(    if \(choicegroup_get_user_answer\(\$choicegroup, \$userid, false, true\) === false\) \{\n        return false;\n    \}\n\n)    choicegroup_check_user_can_change\(\$choicegroup, \$userid, \$context\);\n\n/$1/ or die "s05 did not match";

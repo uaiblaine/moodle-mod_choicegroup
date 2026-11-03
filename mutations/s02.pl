@@ -1,0 +1,1 @@
+s/if \(!\$selectedoption \|\| !\$DB->record_exists\(\x27groups\x27, \[\x27id\x27 => \$selectedoption->groupid, \x27courseid\x27 => \$course->id\]\)\) \{/if (!\$selectedoption) {/ or die "s02 did not match";

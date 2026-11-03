@@ -98,11 +98,6 @@ if (!$download) {
     }
 } else {
     $groupmode = groups_get_activity_groupmode($cm);
-    $groups = choicegroup_get_groups($choicegroup);
-    $groupsids = [];
-    foreach ($groups as $group) {
-        $groupsids[] = $group->id;
-    }
 }
 
 $users = choicegroup_get_response_data($choicegroup, $cm, $groupmode, $choicegroup->onlyactive);
@@ -119,44 +114,15 @@ if ($download == "ods" && has_capability('mod/choicegroup:downloadresponses', $c
     // Creating the first worksheet.
     $myxls = $workbook->add_worksheet($strresponses);
 
-    // Print names of all the fields.
-    $myxls->write_string(0, 0, get_string("lastname"));
-    $myxls->write_string(0, 1, get_string("firstname"));
-    $myxls->write_string(0, 2, get_string("idnumber"));
-    $myxls->write_string(0, 3, get_string("email"));
-    $myxls->write_string(0, 4, get_string("group"));
-    $myxls->write_string(0, 5, get_string("choice", "choicegroup"));
+    // Print names of all the fields, then one row per user.
+    $exportdata = choicegroup_get_export_data($choicegroup, $course, $context, $users);
+    foreach ($exportdata['header'] as $col => $title) {
+        $myxls->write_string(0, $col, $title);
+    }
 
-    // Generate the data for the body of the spreadsheet.
-    $i = 0;
-    $row = 1;
-    if ($users) {
-        $displayed = [];
-        foreach ($users as $option => $userid) {
-            foreach ($userid as $user) {
-                if (in_array($user->id, $displayed)) {
-                    continue;
-                }
-
-                $displayed[] = $user->id;
-                $myxls->write_string($row, 0, $user->lastname);
-                $myxls->write_string($row, 1, $user->firstname);
-                $studentid = (!empty($user->idnumber) ? $user->idnumber : " ");
-                $myxls->write_string($row, 2, $studentid);
-                $myxls->write_string($row, 3, $user->email);
-                $ug2 = [];
-                if ($usergrps = groups_get_all_groups($course->id, $user->id)) {
-                    foreach ($groupsids as $gid) {
-                        if (array_key_exists($gid, $usergrps)) {
-                            $ug2[] = format_string($usergrps[$gid]->name);
-                        }
-                    }
-                }
-
-                $myxls->write_string($row, 4, implode(', ', $ug2));
-                $row++;
-                $pos = 5;
-            }
+    foreach ($exportdata['rows'] as $i => $cells) {
+        foreach ($cells as $col => $cell) {
+            $myxls->write_string($i + 1, $col, $cell);
         }
     }
 
@@ -176,52 +142,18 @@ if ($download == "xls" && has_capability('mod/choicegroup:downloadresponses', $c
     $workbook = new MoodleExcelWorkbook("-");
     // Send HTTP headers.
     $workbook->send($filename);
-    // Creating the first worksheet
-    // assigning by reference gives this: Strict standards: Only variables should be assigned by reference in
-    // /data_1/www/html/moodle/moodle/mod/choicegroup/report.php on line 157
-    // removed the ampersand.
+    // Create the worksheet.
     $myxls = $workbook->add_worksheet($strresponses);
-    // Print names of all the fields.
-    $myxls->write_string(0, 0, get_string("lastname"));
-    $myxls->write_string(0, 1, get_string("firstname"));
-    $myxls->write_string(0, 2, get_string("idnumber"));
-    $myxls->write_string(0, 3, get_string("email"));
-    $myxls->write_string(0, 4, get_string("group"));
-    $myxls->write_string(0, 5, get_string("choice", "choicegroup"));
+    // Print names of all the fields, then one row per user.
+    $exportdata = choicegroup_get_export_data($choicegroup, $course, $context, $users);
+    foreach ($exportdata['header'] as $col => $title) {
+        $myxls->write_string(0, $col, $title);
+    }
 
-
-    // Generate the data for the body of the spreadsheet.
-    $i = 0;
-    $row = 1;
-    if ($users) {
-        $displayed = [];
-        foreach ($users as $option => $userid) {
-            foreach ($userid as $user) {
-                if (in_array($user->id, $displayed)) {
-                    continue;
-                }
-
-                $displayed[] = $user->id;
-                $myxls->write_string($row, 0, $user->lastname);
-                $myxls->write_string($row, 1, $user->firstname);
-                $studentid = (!empty($user->idnumber) ? $user->idnumber : " ");
-                $myxls->write_string($row, 2, $studentid);
-                $myxls->write_string($row, 3, $user->email);
-                $ug2 = [];
-                if ($usergrps = groups_get_all_groups($course->id, $user->id)) {
-                    foreach ($groupsids as $gid) {
-                        if (array_key_exists($gid, $usergrps)) {
-                            $ug2[] = format_string($usergrps[$gid]->name);
-                        }
-                    }
-                }
-
-                $myxls->write_string($row, 4, implode(', ', $ug2));
-                $row++;
-            }
+    foreach ($exportdata['rows'] as $i => $cells) {
+        foreach ($cells as $col => $cell) {
+            $myxls->write_string($i + 1, $col, $cell);
         }
-
-        $pos = 5;
     }
 
     // Close the workbook.
@@ -239,46 +171,11 @@ if ($download == "txt" && has_capability('mod/choicegroup:downloadresponses', $c
     header("Cache-Control: must-revalidate,post-check=0,pre-check=0");
     header("Pragma: public");
 
-    // Print names of all the fields.
-
-    echo get_string("lastname") . "\t" . get_string("firstname") . "\t" . get_string("idnumber") . "\t";
-    echo get_string("email") . "\t";
-    echo get_string("group") . "\t";
-    echo get_string("choice", "choicegroup") . "\n";
-
-    // Generate the data for the body of the spreadsheet.
-    $i = 0;
-    if ($users) {
-        $displayed = [];
-        foreach ($users as $option => $userid) {
-            foreach ($userid as $user) {
-                if (in_array($user->id, $displayed)) {
-                    continue;
-                }
-
-                $displayed[] = $user->id;
-                echo $user->lastname;
-                echo "\t" . $user->firstname;
-                $studentid = " ";
-                if (!empty($user->idnumber)) {
-                    $studentid = $user->idnumber;
-                }
-
-                echo "\t" . $studentid . "\t";
-                echo $user->email . "\t";
-                $ug2 = [];
-                if ($usergrps = groups_get_all_groups($course->id, $user->id)) {
-                    foreach ($groupsids as $gid) {
-                        if (array_key_exists($gid, $usergrps)) {
-                            $ug2[] = format_string($usergrps[$gid]->name);
-                        }
-                    }
-                }
-
-                echo implode(', ', $ug2) . "\t";
-                echo "\n";
-            }
-        }
+    // Print names of all the fields, then one line per user; a cell keeps no tab or line break of its own.
+    $exportdata = choicegroup_get_export_data($choicegroup, $course, $context, $users);
+    echo implode("\t", array_map('choicegroup_clean_txt_cell', $exportdata['header'])) . "\n";
+    foreach ($exportdata['rows'] as $cells) {
+        echo implode("\t", array_map('choicegroup_clean_txt_cell', $cells)) . "\t\n";
     }
 
     exit;

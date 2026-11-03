@@ -88,7 +88,7 @@ foreach ($choicegroups as $choicegroup) {
         $aa = [];
 
         foreach ($answers as $answer) {
-            $aa[] = $answer->name;
+            $aa[] = format_string($answer->name, true, ['context' => context_course::instance($course->id)]);
         }
 
         $aa = implode(', ', $aa);

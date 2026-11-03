@@ -21,7 +21,7 @@ use context_module;
 use stdClass;
 
 /**
- * Class manager for choicegroup activity
+ * Manager of a choicegroup instance: the record, its course module and the counts the course overview shows.
  *
  * @package   mod_choicegroup
  * @copyright 2025 Luca Bösch <luca.boesch@bfh.ch>
@@ -123,7 +123,7 @@ class manager {
     }
 
     /**
-     * Return the count of users who can submit ratings to this choicegroup module, that the current user can see.
+     * Return the count of users who can choose in this choicegroup, that the current user can see.
      *
      * @param int[] $groupids the group identifiers to filter by, empty array means no filtering
      * @return int the number of answers that the user can see
@@ -163,9 +163,9 @@ class manager {
     }
 
     /**
-     * Return the current count of users who have submitted ratings to this choicegroup module, that the current user can see.
+     * Return the count of users who have chosen a group in this choicegroup, that the current user can see.
      *
-     * @param int[] $groupids the group identifiers to filter by, empty array means no filtering
+     * @param int[] $groupids Not used: the count follows the activity group mode, not this filter
      * @return int the number of answers that the user can see
      */
     public function count_all_users_answered(
@@ -181,22 +181,18 @@ class manager {
             groups_get_activity_group($this->cm, true);
         }
 
-        // Big function, approx 6 SQL calls per user.
         $allresponses = choicegroup_get_response_data($this->instance, $this->cm, $groupmode, 'no');
-        $responsecount = 0;
+        // Users, not memberships: with multiple enrolments (or a membership added by hand) a user sits in several
+        // option groups, and the overview sets this count against a count of users.
         $respondents = [];
         foreach ($allresponses as $optionid => $userlist) {
             if ($optionid) {
-                $responsecount += count($userlist);
-                if ($choicegroup->multipleenrollmentspossible) {
-                    foreach ($userlist as $user) {
-                        if (!in_array($user->id, $respondents)) {
-                            $respondents[] = $user->id;
-                        }
-                    }
+                foreach ($userlist as $user) {
+                    $respondents[$user->id] = true;
                 }
             }
         }
-        return $responsecount;
+
+        return count($respondents);
     }
 }

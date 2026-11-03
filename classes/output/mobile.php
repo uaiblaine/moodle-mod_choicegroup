@@ -72,7 +72,7 @@ class mobile {
         $context = context_module::instance($cm->id);
         require_capability('mod/choicegroup:choose', $context);
 
-        // Get choice_options from external.
+        // Load the instance and the user's current answer.
         $choicegroup = choicegroup_get_choicegroup($cm->instance);
         $current = choicegroup_get_user_answer($choicegroup, $USER);
 

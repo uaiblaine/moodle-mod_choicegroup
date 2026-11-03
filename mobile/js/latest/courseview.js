@@ -147,8 +147,8 @@ this.loadOfflineData = () => {
 /**
  * Tries to synchronize the activity.
  *
- * @param showErrors If show errors to the user of hide them.
- * @param done Function to call when done.
+ * @param {boolean} showErrors Whether to show errors to the user or hide them.
+ * @param {Function} done Function to call when done.
  * @return Promise resolved with true if sync succeed, or false if failed.
  */
 this.synchronize = (showErrors, done) => {
@@ -186,7 +186,7 @@ this.synchronize = (showErrors, done) => {
 /**
  * Refresh data.
  *
- * @param done Function to call when done.
+ * @param {Function} done Function to call when done.
  * @return Promise resolved when done.
  */
 this.doRefresh = (done) => {
