@@ -43,6 +43,16 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
 - JavaScript validation messages use `core/notification` instead of `alert()`.
 - The mobile templates load the view web service from an `ion-text` element, which the template
   linter accepts.
+- The table layout, the responses report, the download buttons and the enrolment conditions box
+  render from Mustache templates (`options_table`, `results_names`, `results_anonymous`,
+  `report_downloads`, `enrollment_conditions`); no `html_writer` is left. `index.php` only redirects
+  to the activities overview, and the unreachable legacy results table of
+  `prepare_choicegroup_show_results()` is gone.
+- `choicegroupdatadisplay` and `select_all_choices` are ES modules without jQuery.
+- The "Show group members" and "Show descriptions" toggles are buttons that state
+  `aria-expanded` and name the regions they control (`aria-controls`).
+- The borders of the table layout read the theme's colour tokens, which also follows dark mode.
+- The Behat scenarios for Moodle versions before 5.3 are gone, with the version steps of the rest.
 
 ### Security
 
@@ -87,3 +97,6 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
 - Option and group names in the settings form are escaped.
 - `border-collapse` on the choice table no longer needs `!important`.
 - Lint warnings in the AMD modules and a missing licence header in `choicegroupdatadisplay.js`.
+- With several choices, the member-limit locks of the groups a submission joins are held until its
+  transaction commits: released earlier, a concurrent submission could not yet count the new member
+  and a limited group could overfill by one.

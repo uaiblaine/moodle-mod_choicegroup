@@ -245,7 +245,7 @@ if ($choicegroup->multipleenrollmentspossible == 1) {
     }
     if ($enrollmentinfomsg) {
         echo $OUTPUT->box(
-            html_writer::tag('strong', get_string('enrollmentconditions', 'choicegroup') . ': ') . $enrollmentinfomsg,
+            $OUTPUT->render_from_template('mod_choicegroup/enrollment_conditions', ['message' => $enrollmentinfomsg]),
             'generalbox',
             'choicegroup-enrollment-conditions'
         );

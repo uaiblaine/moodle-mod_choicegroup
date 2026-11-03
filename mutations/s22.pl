@@ -1,1 +1,1 @@
-s/s\(fullname\(\$groupmember\)\)/fullname(\$groupmember)/ or die "s22 did not match";
+s/\{\{\^first\}\}<br>\{\{\/first\}\}\{\{name\}\}/{{^first}}<br>{{\/first}}{{{name}}}/ or die "s22 did not match";

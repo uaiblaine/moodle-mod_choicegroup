@@ -16,46 +16,70 @@
 /**
  * Shows and hides the group members and group descriptions on the view page.
  *
+ * Each toggle is a button whose aria-expanded says whether its regions (aria-controls) are shown; a click flips it,
+ * the regions and the button's text together.
+ *
  * @module      mod_choicegroup/choicegroupdatadisplay
  * @copyright   2018 Université de Lausanne
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['jquery', 'core/str'], function($, str) {
-    return {
-        init: function() {
-            $('.choicegroup-memberdisplay').click(function(e) {
-                e.preventDefault();
-                $('.choicegroups-membersnames').toggleClass('hidden');
-                var showusersstring = str.get_string('showgroupmembers', 'mod_choicegroup');
-                var hideusersstring = str.get_string('hidegroupmembers', 'mod_choicegroup');
-                if ($('.choicegroups-membersnames').is(":visible")) {
-                    $.when(hideusersstring).done(function(hidestring) {
-                        $(".choicegroup-memberdisplay").html(hidestring);
-                    });
-                } else {
-                    $.when(showusersstring).done(function(showstring) {
-                        $(".choicegroup-memberdisplay").html(showstring);
-                    });
-                }
-            });
+import {getString} from 'core/str';
+import Notification from 'core/notification';
 
-            $('.choicegroup-descriptiondisplay').click(function(e) {
-                e.preventDefault();
-                $('.choicegroups-descriptions').toggleClass('hidden');
-                var hidedescriptionstring = str.get_string('hidedescription', 'mod_choicegroup');
-                var showdescriptionstring = str.get_string('showdescription', 'mod_choicegroup');
-                if ($('.choicegroups-descriptions').is(":visible")) {
-                    $.when(hidedescriptionstring).done(function(hidestring) {
-                        $(".choicegroup-descriptiondisplay").html(hidestring);
-                    });
-                } else {
-                    $.when(showdescriptionstring).done(function(showstring) {
-                        $(".choicegroup-descriptiondisplay").html(showstring);
-                    });
-                }
-            });
+/** @type {Object} The toggles, by the class of their button: the regions they show and the strings of each state. */
+const TOGGLES = {
+    'choicegroup-memberdisplay': {
+        regions: '.choicegroups-membersnames',
+        show: 'showgroupmembers',
+        hide: 'hidegroupmembers',
+    },
+    'choicegroup-descriptiondisplay': {
+        regions: '.choicegroups-descriptions',
+        show: 'showdescription',
+        hide: 'hidedescription',
+    },
+};
+
+/** @type {string} A selector matching every toggle. */
+const SELECTOR = Object.keys(TOGGLES).map((name) => `.${name}`).join(', ');
+
+/** @type {boolean} Whether the click listener is in place, so that a second init adds no second one. */
+let listening = false;
+
+/**
+ * Flip a toggle: its regions, its aria-expanded and its text.
+ *
+ * @param {HTMLElement} button The toggle
+ * @param {Object} toggle Its entry of TOGGLES
+ * @returns {Promise}
+ */
+const flip = async(button, toggle) => {
+    const expanded = button.getAttribute('aria-expanded') !== 'true';
+    document.querySelectorAll(toggle.regions).forEach((region) => {
+        region.classList.toggle('hidden', !expanded);
+    });
+    button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    button.textContent = await getString(expanded ? toggle.hide : toggle.show, 'mod_choicegroup');
+};
+
+/**
+ * Listen to the toggles of the page.
+ */
+export const init = () => {
+    if (listening) {
+        return;
+    }
+    listening = true;
+
+    document.addEventListener('click', (e) => {
+        const button = e.target.closest(SELECTOR);
+        if (!button) {
+            return;
         }
-    };
 
-});
+        e.preventDefault();
+        const name = Object.keys(TOGGLES).find((key) => button.classList.contains(key));
+        flip(button, TOGGLES[name]).catch(Notification.exception);
+    });
+};

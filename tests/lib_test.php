@@ -68,6 +68,7 @@ final class lib_test extends \advanced_testcase {
         require_once($CFG->dirroot . '/mod/choicegroup/lib.php');
         require_once($CFG->dirroot . '/calendar/lib.php');
         require_once($CFG->dirroot . '/mod/choicegroup/tests/fixtures/refusing_lock_factory.php');
+        require_once($CFG->dirroot . '/mod/choicegroup/tests/fixtures/recording_lock_factory.php');
         parent::setUpBeforeClass();
     }
 
@@ -570,6 +571,53 @@ final class lib_test extends \advanced_testcase {
         choicegroup_save_user_choices($choicegroup, $user->id, $course, $cm, [$option[$groups['B']->id]]);
         $this->assertFalse(groups_is_member($groups['A']->id, $user->id));
         $this->assertTrue(groups_is_member($groups['B']->id, $user->id));
+    }
+
+    /**
+     * A set that joins limited groups holds their locks until the transaction has committed.
+     *
+     * Another request counts a group's members only once this one's additions are committed, so a lock released
+     * inside the transaction would let both requests see room for one more member.
+     *
+     * @return void
+     */
+    public function test_a_set_holds_the_group_locks_until_the_commit(): void {
+        global $CFG;
+
+        $this->resetAfterTest();
+        // PHPUnit wraps a test in a transaction, which would stay open past this one's commit.
+        $this->preventResetByRollback();
+        $a = $this->create_setup(['multipleenrollmentspossible' => 1, 'limitanswers' => 1]);
+        $this->set_limit($a, $a->g1->id, 5);
+        $this->set_limit($a, $a->g2->id, 5);
+        $a = $this->load_setup($a);
+        $this->setUser($a->s1);
+
+        $CFG->lock_factory = '\mod_choicegroup_recording_lock_factory';
+        \mod_choicegroup_recording_lock_factory::$releases = [];
+        try {
+            choicegroup_save_user_choices(
+                $a->choicegroup,
+                $a->s1->id,
+                $a->course,
+                $a->cm,
+                [$a->option[$a->g1->id], $a->option[$a->g2->id]]
+            );
+        } finally {
+            unset($CFG->lock_factory);
+        }
+
+        $this->assertTrue(groups_is_member($a->g1->id, $a->s1->id));
+        $this->assertTrue(groups_is_member($a->g2->id, $a->s1->id));
+        // Control: both groups were locked, each once.
+        $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
+        sort($keys);
+        $expected = ['group_' . $a->g1->id, 'group_' . $a->g2->id];
+        sort($expected);
+        $this->assertSame($expected, $keys);
+        foreach (\mod_choicegroup_recording_lock_factory::$releases as $release) {
+            $this->assertFalse($release['intransaction'], $release['key'] . ' was released before the commit.');
+        }
     }
 
     /**

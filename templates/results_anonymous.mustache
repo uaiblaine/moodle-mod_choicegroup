@@ -1,0 +1,57 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/results_anonymous
+
+    The responses report as counts and a bar per group, without the names of the users.
+
+    Context variables required for this template:
+    * rows - one per option: isoption with name (plain), or notanswered for the row of users without a choice;
+      optionid, count, percentage (formatted), width (of the bar, in pixels)
+    * barurl - the URL of the bar image
+
+    Example context (json):
+    {
+        "rows": [
+            {"optionid": 1, "notanswered": false, "isoption": true, "name": "Group A", "count": 3,
+                "percentage": "75.0%", "width": 225}
+        ],
+        "barurl": "https://example.com/theme/image.php/boost/choicegroup/1/row"
+    }
+}}
+<div class="responseheader">
+    <h3>{{#str}}responses, choicegroup{{/str}}</h3>
+</div>
+<table class="results anonymous">
+    <tbody>
+        {{#rows}}
+            <tr>
+                <td class="header cell">
+                    {{#notanswered}}<div class="option">{{#str}}notanswered, choicegroup{{/str}}</div>{{/notanswered}}
+                    {{#isoption}}<div class="option">{{name}}</div>{{/isoption}}
+                    <div title="{{#str}}numberofuser, choicegroup{{/str}}" class="numberofuser"> ({{count}})</div>
+                    <div class="percentage">{{percentage}}</div>
+                </td>
+                <td class="graph horizontal cell">
+                    <a href="#skipresultgraph{{optionid}}" class="skip-block">{{#str}}skipresultgraph, choicegroup{{/str}}</a>
+                    <img style="height: 50px; width: {{width}}px" alt="" src="{{barurl}}">
+                    <span class="skip-block-to" id="skipresultgraph{{optionid}}"></span>
+                </td>
+            </tr>
+        {{/rows}}
+    </tbody>
+</table>
