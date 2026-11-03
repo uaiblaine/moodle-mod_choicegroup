@@ -1,0 +1,101 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/results_names
+
+    The responses report with the names of the users listed under each group, and the form that deletes the selected
+    memberships. amd/src/select_all_choices.js reads the form id attemptsform and the .selectallnone links.
+
+    Context variables required for this template:
+    * hasform - whether the viewer may read the responses, which wraps the table in the form
+    * actionurl - the URL the form posts to
+    * cmid, sesskey - the hidden inputs of the form
+    * columns - one per option: isoption with name (plain), or notanswered for the column of users without a
+      choice; count; users (each with checkbox and grpsmemberid when the membership may be deleted, picture (HTML), profileurl and a
+      plain fullname)
+    * candelete - whether the select all links and the action menu show
+    * actionselect - the rendered action menu (HTML)
+
+    Example context (json):
+    {
+        "hasform": true,
+        "actionurl": "https://example.com/mod/choicegroup/report.php?id=12",
+        "cmid": 12,
+        "sesskey": "abc123",
+        "columns": [
+            {"notanswered": false, "isoption": true, "name": "Group A", "count": 1, "users": [
+                {"checkbox": true, "grpsmemberid": 31, "picture": "<span class=\"userinitials\">AS</span>",
+                    "profileurl": "https://example.com/user/view.php?id=5&course=2", "fullname": "Ana Souza"}
+            ]}
+        ],
+        "candelete": true,
+        "actionselect": "<select id=\"menuaction\" name=\"action\"><option value=\"delete\">Delete</option></select>"
+    }
+}}
+<h3>{{#str}}responses, choicegroup{{/str}}</h3>
+{{#hasform}}
+<form method="POST" action="{{actionurl}}" id="attemptsform" class="tableform">
+    <input type="hidden" name="id" value="{{cmid}}">
+    <input type="hidden" name="sesskey" value="{{sesskey}}">
+    <input type="hidden" name="mode" value="overview">
+{{/hasform}}
+    <div class="response tablecontainer">
+        <table class="results names table-reboot choicegroups boxaligncenter">
+            <thead>
+                <tr>
+                    {{#columns}}
+                        <th class="header data" scope="col">
+                            {{#notanswered}}<div class="option">{{#str}}notanswered, choicegroup{{/str}}</div>{{/notanswered}}
+                            {{#isoption}}<div class="option">{{name}}</div>{{/isoption}}
+                            <div class="numberofuser" title="{{#str}}numberofuser, choicegroup{{/str}}"> ({{count}})</div>
+                        </th>
+                    {{/columns}}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    {{#columns}}
+                        <td class="data cell">
+                            {{#users}}
+                                <div class="user">
+                                    {{#checkbox}}
+                                        <div class="attemptaction"><input type="checkbox" name="grpsmemberid[]" value="{{grpsmemberid}}"></div>
+                                    {{/checkbox}}
+                                    <div class="image">{{{picture}}}</div>
+                                    <div class="fullname"><a href="{{profileurl}}" class="username">{{fullname}}</a></div>
+                                    <div class="clearfloat"></div>
+                                </div>
+                            {{/users}}
+                        </td>
+                    {{/columns}}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="responseaction">
+        {{#candelete}}
+            <div class="selectallnone">
+                <a href="#" data-select-info="1">{{#str}}selectall, core{{/str}}</a> /
+                <a href="#" data-select-info="0">{{#str}}deselectall, core{{/str}}</a>
+            </div>
+            <label for="menuaction" class="me-1"> {{#str}}withselected, choicegroup{{/str}} </label>
+            {{{actionselect}}}
+        {{/candelete}}
+    </div>
+{{#hasform}}
+</form>
+{{/hasform}}

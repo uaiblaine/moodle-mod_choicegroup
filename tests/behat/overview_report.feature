@@ -30,8 +30,7 @@ Feature: Testing overview integration in choicegroup activity
 
   @javascript
   Scenario: The choicegroup activity overview report should generate log events
-    Given the site is running Moodle version 5.0 or higher
-    And I am on the "Course 1" "course > activities > choicegroup" page logged in as "teacher1"
+    Given I am on the "Course 1" "course > activities > choicegroup" page logged in as "teacher1"
     When I am on the "Course 1" "course" page logged in as "teacher1"
     And I navigate to "Reports" in current page administration
     And I click on "Logs" "link"
@@ -41,8 +40,7 @@ Feature: Testing overview integration in choicegroup activity
 
   @javascript
   Scenario: The choicegroup activity index redirect to the activities overview
-    Given the site is running Moodle version 5.0 or higher
-    And I am on the "Group choice 1" "choicegroup activity editing" page logged in as teacher1
+    Given I am on the "Group choice 1" "choicegroup activity editing" page logged in as teacher1
     And I set the field "availablegroups" to "A"
     And I press "Add"
     And I set the field "availablegroups" to "B"

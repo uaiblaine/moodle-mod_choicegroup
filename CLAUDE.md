@@ -80,7 +80,7 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 lib.php                 module callbacks + the choice logic (submit, delete, response data)
 view.php                activity page; POST handling for choosing / removing
 report.php              responses report, delete and ODS/XLS/TXT downloads
-renderer.php            html_writer output of the table layout and the results; display_selection_cards() for the cards
+renderer.php            the table layout (templates/options_table), the results (results_names|results_anonymous), the cards
 classes/local/selection.php   the card layout's rules: search, filters, sort, and what a card shows to whom
 classes/external/get_cards.php + templates/selection_page|card|card_details + amd/src/selection.js   the cards
 mod_form.php            settings form; the group picker is hand-built HTML + amd/src/choicegroupsetting.js
@@ -116,21 +116,8 @@ fork site.
   names never show more than showresults, publish and the group's visibility allow.
 - Multi-choice cards post `answers[]` (option ids); the table posts `answer_N`. view.php reads by
   the instance's `selectionlayout`, and choices on unloaded pages travel as hidden inputs.
-
-## Known gaps (next pull request)
-
-Left out of the fleet-standard pull request on purpose, to keep upstream syncs cheap; the owner
-wants them done in a follow-up pull request of their own:
-
-- `html_writer` output (renderer.php, report.php, index.php, lib.php, view.php, the group picker
-  in mod_form.php) moved to Mustache templates; the fleet rule is zero `html_writer`.
-- The jQuery AMD modules (`choicegroupdatadisplay`, `select_all_choices`) rewritten as ES modules.
-- The members and descriptions show/hide toggles made accessible: `<button>` with
-  `aria-expanded`/`aria-controls` instead of `<a role="button" href="#">`.
-- The literal colours in styles.css replaced with theme tokens through a fallback chain
-  (`var(--bs-border-color, var(--border-color, #dee2e6))`), which also fixes dark mode.
-- The member-limit lock is released before the multi-mode transaction commits, so a limited group
-  can overfill by one under concurrent requests.
+- A member-limit lock (`choicegroup_lock_groups()`) is released only after the transaction that
+  wrote under it commits: another request cannot count an uncommitted member.
 
 ## Testing notes
 

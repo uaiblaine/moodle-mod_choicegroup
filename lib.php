@@ -558,25 +558,83 @@ function choicegroup_save_user_choices($choicegroup, $userid, $course, $cm, arra
         throw new moodle_exception('mustchoosemin', 'choicegroup', '', $choicegroup->minenrollments);
     }
 
+    // The limited groups the set joins are locked before the transaction and released after its commit: another
+    // request counting a group's members cannot see this one's additions until the commit, so a lock released
+    // earlier would let both see room for one more and overfill the group.
+    // Every limited group the set names is locked, joined or not yet: a membership read before the lock could change
+    // before the add, and a group left unlocked would then be joined under no lock.
+    $tojoin = [];
+    if ($choicegroup->limitanswers) {
+        foreach ($optionids as $optionid) {
+            $tojoin[] = $optiongroupids[$optionid];
+        }
+    }
+    $locks = choicegroup_lock_groups($tojoin);
+
     // One transaction for the whole set: a later option that hits a full group throws after earlier additions and
     // removals were written, and the user would be left in a state nobody chose. Core buffers the events until the
     // commit and drops them on a rollback.
-    $transaction = $DB->start_delegated_transaction();
     try {
-        foreach ($optiongroupids as $optionid => $groupid) {
-            if (in_array($optionid, $optionids, true)) {
-                if (!groups_is_member($groupid, $userid)) {
-                    choicegroup_user_submit_response($optionid, $choicegroup, $userid, $course, $cm);
+        $transaction = $DB->start_delegated_transaction();
+        try {
+            foreach ($optiongroupids as $optionid => $groupid) {
+                if (in_array($optionid, $optionids, true)) {
+                    if (!groups_is_member($groupid, $userid)) {
+                        choicegroup_user_submit_response($optionid, $choicegroup, $userid, $course, $cm, isset($locks[$groupid]));
+                    }
+                } else {
+                    choicegroup_remove_member($choicegroup, $groupid, $userid, $course, $cm);
                 }
-            } else {
-                choicegroup_remove_member($choicegroup, $groupid, $userid, $course, $cm);
             }
+            $transaction->allow_commit();
+        } catch (\Exception $e) {
+            // The request cache was refilled inside the transaction with rows that are about to vanish.
+            choicegroup_purge_request_cache();
+            $transaction->rollback($e);
         }
-        $transaction->allow_commit();
-    } catch (\Exception $e) {
-        // The request cache was refilled inside the transaction with rows that are about to vanish.
-        choicegroup_purge_request_cache();
-        $transaction->rollback($e);
+    } finally {
+        // After the commit or the rollback, and also when the transaction could not start.
+        choicegroup_release_locks($locks);
+    }
+}
+
+/**
+ * Take the member-limit lock of each group, in group id order: two requests never each hold a lock the other waits for.
+ *
+ * The lock is the one {@see choicegroup_user_submit_response()} takes around its add and count. Release them with
+ * {@see choicegroup_release_locks()}.
+ *
+ * @param int[] $groupids The groups to lock
+ * @return \core\lock\lock[] The locks, keyed by group id
+ * @throws moodle_exception When a lock is not granted in time; the locks taken until then are released
+ */
+function choicegroup_lock_groups(array $groupids) {
+    $groupids = array_unique(array_map('intval', $groupids));
+    sort($groupids);
+
+    $factory = \core\lock\lock_config::get_lock_factory('mod_choicegroup');
+    $locks = [];
+    foreach ($groupids as $groupid) {
+        $lock = $factory->get_lock('group_' . $groupid, 5);
+        if (!$lock) {
+            choicegroup_release_locks($locks);
+            throw new moodle_exception('locktimeout');
+        }
+        $locks[$groupid] = $lock;
+    }
+
+    return $locks;
+}
+
+/**
+ * Release the locks {@see choicegroup_lock_groups()} took.
+ *
+ * @param \core\lock\lock[] $locks The locks
+ * @return void
+ */
+function choicegroup_release_locks(array $locks) {
+    foreach ($locks as $lock) {
+        $lock->release();
     }
 }
 
@@ -687,9 +745,10 @@ function choicegroup_get_snapshot_record($choicegroup) {
  * @param int $userid
  * @param object $course Course object
  * @param object $cm
+ * @param bool $locked Whether the caller holds the group's member-limit lock ({@see choicegroup_lock_groups()})
  * @throws \moodle_exception
  */
-function choicegroup_user_submit_response($formanswer, $choicegroup, $userid, $course, $cm) {
+function choicegroup_user_submit_response($formanswer, $choicegroup, $userid, $course, $cm, $locked = false) {
     global $DB, $CFG;
     require_once($CFG->libdir . '/completionlib.php');
 
@@ -720,14 +779,9 @@ function choicegroup_user_submit_response($formanswer, $choicegroup, $userid, $c
     $groupmemberadded = true;
     if ($choicegroup->limitanswers) {
         // The add and the count run under one lock per group: two requests that both added before either counted
-        // would both see themselves within the limit and overfill the group.
-        $lock = \core\lock\lock_config::get_lock_factory('mod_choicegroup')->get_lock(
-            'group_' . $selectedoption->groupid,
-            5
-        );
-        if (!$lock) {
-            throw new moodle_exception('locktimeout');
-        }
+        // would both see themselves within the limit and overfill the group. A caller inside a transaction holds
+        // the lock until its commit instead.
+        $locks = $locked ? [] : choicegroup_lock_groups([$selectedoption->groupid]);
 
         try {
             groups_add_member($selectedoption->groupid, $userid);
@@ -743,7 +797,7 @@ function choicegroup_user_submit_response($formanswer, $choicegroup, $userid, $c
                 $groupmemberadded = false;
             }
         } finally {
-            $lock->release();
+            choicegroup_release_locks($locks);
         }
     } else {
         groups_add_member($selectedoption->groupid, $userid);
@@ -889,11 +943,11 @@ function choicegroup_clean_txt_cell($value) {
  * @param object $course
  * @param object $cm
  * @param array $allresponses
- * @param bool $forcepublish
+ * @param bool $forcepublish Unused: the renderer decides how the results show ({@see mod_choicegroup_renderer::display_result()})
  * @return object|false The display data, or false (after printing a notice) when there are no responses
  */
 function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allresponses, $forcepublish = false) {
-    global $CFG, $fullscript, $PAGE, $OUTPUT;
+    global $OUTPUT;
 
     $display = clone($choicegroup);
     $display->coursemoduleid = $cm->id;
@@ -933,162 +987,6 @@ function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allrespon
     if (empty($allresponses)) {
         echo $OUTPUT->heading(get_string("nousersyet"));
         return false;
-    }
-
-    $totalresponsecount = 0;
-    foreach ($allresponses as $optionid => $userlist) {
-        if ($choicegroup->showunanswered || $optionid) {
-            $totalresponsecount += count($userlist);
-        }
-    }
-
-    $context = context_module::instance($cm->id);
-
-    $hascapfullnames = has_capability('moodle/site:viewfullnames', $context);
-
-    $viewresponses = has_capability('mod/choicegroup:readresponses', $context);
-    switch ($forcepublish) {
-        case CHOICEGROUP_PUBLISH_NAMES:
-            echo '<div id="tablecontainer">';
-            if ($viewresponses) {
-                echo '<form id="attemptsform" method="post" action="' . $fullscript . '" ' .
-                    'onsubmit="var menu = document.getElementById(\'menuaction\'); ' .
-                    'return (menu.options[menu.selectedIndex].value ' .
-                    '== \'delete\' ? \'' . addslashes_js(get_string('deleteattemptcheck', 'quiz')) . '\' : true);">';
-                echo '<div>';
-                echo '<input type="hidden" name="id" value="' . $cm->id . '" />';
-                echo '<input type="hidden" name="sesskey" value="' . sesskey() . '" />';
-                echo '<input type="hidden" name="mode" value="overview" />';
-            }
-
-            echo "<table cellpadding=\"5\" cellspacing=\"10\" class=\"results names table-reboot\">";
-            echo "<tr>";
-
-            $columncount = []; // Number of votes in each column.
-            if ($choicegroup->showunanswered) {
-                $columncount[0] = 0;
-                echo "<th class=\"col0 header\" scope=\"col\">";
-                print_string('notanswered', 'choicegroup');
-                echo "</th>";
-            }
-
-            $count = 1;
-            foreach ($choicegroup->option as $optionid => $optiontext) {
-                $columncount[$optionid] = 0; // Init counters.
-                echo "<th class=\"col$count header\" scope=\"col\">";
-                echo format_string($optiontext);
-                echo "</th>";
-                $count++;
-            }
-
-            echo "</tr><tr>";
-
-            if ($choicegroup->showunanswered) {
-                echo "<td class=\"col$count data\" >";
-                // Added empty row so that when the next iteration is empty,
-                // we do not get <table></table> error from w3c validator
-                // MDL-7861.
-                echo "<table class=\"choicegroupresponse table-reboot\"><tr><td></td></tr>";
-                if (!empty($allresponses[0])) {
-                    foreach ($allresponses[0] as $user) {
-                        echo "<tr>";
-                        echo "<td class=\"picture\">";
-                        echo $OUTPUT->user_picture($user, ['courseid' => $course->id]);
-                        echo "</td><td class=\"fullname\">";
-                        echo "<a href=\"$CFG->wwwroot/user/view.php?id=$user->id&amp;course=$course->id\">";
-                        echo s(fullname($user, $hascapfullnames));
-                        echo "</a>";
-                        echo "</td></tr>";
-                    }
-                }
-
-                echo "</table></td>";
-            }
-
-            $count = 1;
-            foreach ($choicegroup->option as $optionid => $optiontext) {
-                    echo '<td class="col' . $count . ' data" >';
-
-                    // Added empty row so that when the next iteration is empty,
-                    // we do not get <table></table> error from w3c validator
-                    // MDL-7861.
-                    echo '<table class="choicegroupresponse table-reboot"><tr><td></td></tr>';
-                if (isset($allresponses[$optionid])) {
-                    foreach ($allresponses[$optionid] as $user) {
-                        $columncount[$optionid] += 1;
-                        echo '<tr><td class="attemptcell">';
-                        if ($viewresponses && has_capability('mod/choicegroup:deleteresponses', $context)) {
-                            echo '<input type="checkbox" name="userid[]" value="' . $user->id . '" />';
-                        }
-
-                        echo '</td><td class="picture">';
-                        echo $OUTPUT->user_picture($user, ['courseid' => $course->id]);
-                        echo '</td><td class="fullname">';
-                        echo "<a href=\"$CFG->wwwroot/user/view.php?id=$user->id&amp;course=$course->id\">";
-                        echo s(fullname($user, $hascapfullnames));
-                        echo '</a>';
-                        echo '</td></tr>';
-                    }
-                }
-
-                    $count++;
-                    echo '</table></td>';
-            }
-
-            echo "</tr><tr>";
-            $count = 1;
-
-            if ($choicegroup->showunanswered) {
-                echo "<td></td>";
-            }
-
-            foreach ($choicegroup->option as $optionid => $optiontext) {
-                echo "<td align=\"center\" class=\"col$count count\">";
-                if ($choicegroup->limitanswers) {
-                    echo get_string("taken", "choicegroup") . ":";
-                    echo $columncount[$optionid];
-                    echo "<br/>";
-                    echo get_string("limit", "choicegroup") . ":";
-                    echo $choicegroup->maxanswers[$optionid];
-                } else {
-                    if (isset($columncount[$optionid])) {
-                        echo $columncount[$optionid];
-                    }
-                }
-
-                echo "</td>";
-                $count++;
-            }
-
-            echo "</tr>";
-
-            // Print "Select all" etc.
-            if ($viewresponses && has_capability('mod/choicegroup:deleteresponses', $context)) {
-                echo '<tr><td></td><td>';
-                echo '<a href="javascript:select_all_in(\'DIV\',null,\'tablecontainer\');">' . get_string('selectall') . '</a> / ';
-                echo '<a href="javascript:deselect_all_in(\'DIV\',null,\'tablecontainer\');">' . get_string('deselectall') .
-                    '</a> ';
-                echo '&nbsp;&nbsp;';
-                echo html_writer::label(get_string('withselected', 'choicegroup'), 'menuaction');
-                echo html_writer::select(
-                    ['delete' => get_string('delete')],
-                    'action',
-                    '',
-                    ['' => get_string('withselectedusers')],
-                    ['id' => 'menuaction']
-                );
-                $PAGE->requires->js_init_call('M.util.init_select_autosubmit', ['attemptsform', 'menuaction', '']);
-                echo '<noscript id="noscriptmenuaction" style="display:inline">';
-                echo '<div>';
-                echo '<input type="submit" value="' . get_string('go') . '" /></div></noscript>';
-                echo '</td><td></td></tr>';
-            }
-
-            echo "</table></div>";
-            if ($viewresponses) {
-                echo "</form></div>";
-            }
-            break;
     }
 
     return $display;

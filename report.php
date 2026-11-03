@@ -193,24 +193,18 @@ echo $renderer->display_result($results, has_capability('mod/choicegroup:readres
 
 // Now give links for downloading spreadsheets.
 if (!empty($users) && has_capability('mod/choicegroup:downloadresponses', $context)) {
-    $downloadoptions = [];
-    $options = [];
-    $options["id"] = "$cm->id";
-    $options["download"] = "ods";
-    $button = $OUTPUT->single_button(new moodle_url("report.php", $options), get_string("downloadods"));
-    $downloadoptions[] = html_writer::tag('li', $button, ['class' => 'reportoption mt-1']);
+    $formats = [
+        'ods' => get_string('downloadods'),
+        'xls' => get_string('downloadexcel'),
+        'txt' => get_string('downloadtext'),
+    ];
+    $buttons = [];
+    foreach ($formats as $format => $label) {
+        $url = new moodle_url('report.php', ['id' => $cm->id, 'download' => $format]);
+        $buttons[] = ['button' => $OUTPUT->single_button($url, $label)];
+    }
 
-    $options["download"] = "xls";
-    $button = $OUTPUT->single_button(new moodle_url("report.php", $options), get_string("downloadexcel"));
-    $downloadoptions[] = html_writer::tag('li', $button, ['class' => 'reportoption mt-1']);
-
-    $options["download"] = "txt";
-    $button = $OUTPUT->single_button(new moodle_url("report.php", $options), get_string("downloadtext"));
-    $downloadoptions[] = html_writer::tag('li', $button, ['class' => 'reportoption mt-1']);
-
-    $downloadlist = html_writer::tag('ul', implode('', $downloadoptions));
-    $downloadlist .= html_writer::tag('div', '', ['class' => 'clearfloat']);
-    echo html_writer::tag('div', $downloadlist, ['class' => 'downloadreport']);
+    echo $OUTPUT->render_from_template('mod_choicegroup/report_downloads', ['buttons' => $buttons]);
 }
 
 echo $OUTPUT->footer();

@@ -1,0 +1,158 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/options_table
+
+    The table layout of the selection page: one row per group, with a radio (one choice) or a checkbox (several),
+    the member counts and names when the results are shown, and the save button.
+
+    The form class tableform, the input ids choiceid_<optionid> and the names answer, answer_N, answer_N_groupid and
+    number_of_groups are read by view.php and amd/src/enrollment_limit_validator.js.
+
+    Context variables required for this template:
+    * actionurl - the URL the form posts to
+    * descriptionshidden - whether the group descriptions start hidden
+    * descriptionids - the ids of the description regions, space separated
+    * showresults - whether the member count column is shown
+    * limitanswers - whether the count is shown against the group's limit
+    * showmembers - whether the member names column is shown
+    * memberids - the ids of the member name regions, space separated
+    * rows - one per option: missing (the group no longer exists) with colspan, or optionid, name (plain), full,
+      description (formatted HTML), inputname, inputtype, checked, disabled, count, maxanswers, members (each a plain
+      name, first for the first one)
+    * multiple - whether several groups may be chosen
+    * numberofgroups, mappings - the hidden inputs of a multiple choice: the number of options and, for each, the name
+      and the group id
+    * sesskey, cmid - the hidden inputs every post carries
+    * hascapability - whether the viewer may choose
+    * allfull - whether no group has room left
+    * cansubmit - whether the save button shows
+    * hidesubmit - whether the save button starts hidden
+    * removeurl - the URL that removes the viewer's choice, or empty
+    * havetologin - whether to say that choosing needs a login
+
+    Example context (json):
+    {
+        "actionurl": "https://example.com/mod/choicegroup/view.php",
+        "descriptionshidden": false,
+        "descriptionids": "choicegroup-description-1",
+        "showresults": true,
+        "limitanswers": true,
+        "showmembers": true,
+        "memberids": "choicegroup_1",
+        "rows": [
+            {"missing": false, "optionid": 1, "name": "Group A", "full": false,
+                "description": "<p>Tuesdays and Thursdays.</p>", "inputname": "answer", "inputtype": "radio",
+                "checked": false, "disabled": false, "count": 2, "maxanswers": 5,
+                "members": [{"name": "Ana Souza", "first": true}, {"name": "Bruno Lima", "first": false}]}
+        ],
+        "multiple": false,
+        "numberofgroups": 0,
+        "mappings": [{"name": "answer_0_groupid", "groupid": 7}],
+        "sesskey": "abc123",
+        "cmid": 12,
+        "hascapability": true,
+        "allfull": false,
+        "cansubmit": true,
+        "hidesubmit": false,
+        "removeurl": "https://example.com/mod/choicegroup/view.php?id=12&action=delchoicegroup&sesskey=abc123",
+        "havetologin": false
+    }
+}}
+<form method="POST" action="{{actionurl}}" class="tableform">
+    <div class="tablecontainer">
+        <table class="choicegroups table-reboot">
+            <tr>
+                <th class="width10">{{#str}}choice, choicegroup{{/str}}</th>
+                <th class="width40">
+                    {{#str}}group, core{{/str}}
+                    <button type="button" class="choicegroup-descriptiondisplay choicegroup-descriptionshow btn btn-secondary ms-1"
+                        aria-controls="{{descriptionids}}"
+                        aria-expanded="{{#descriptionshidden}}false{{/descriptionshidden}}{{^descriptionshidden}}true{{/descriptionshidden}}">
+                        {{#descriptionshidden}}{{#str}}showdescription, choicegroup{{/str}}{{/descriptionshidden}}
+                        {{^descriptionshidden}}{{#str}}hidedescription, choicegroup{{/str}}{{/descriptionshidden}}
+                    </button>
+                </th>
+                {{#showresults}}
+                    <th class="width10">
+                        {{#limitanswers}}{{#str}}members/max, choicegroup{{/str}}{{/limitanswers}}
+                        {{^limitanswers}}{{#str}}members/, choicegroup{{/str}}{{/limitanswers}}
+                    </th>
+                {{/showresults}}
+                {{#showmembers}}
+                    <th class="width40">
+                        {{#str}}groupmembers, choicegroup{{/str}}
+                        <button type="button" class="choicegroup-memberdisplay choicegroup-membershow btn btn-secondary ms-1"
+                            aria-controls="{{memberids}}" aria-expanded="false">{{#str}}showgroupmembers, choicegroup{{/str}}</button>
+                    </th>
+                {{/showmembers}}
+            </tr>
+            {{#rows}}
+                {{#missing}}
+                    <tr><td colspan="{{colspan}}">{{#str}}groupdoesntexist, choicegroup{{/str}}</td></tr>
+                {{/missing}}
+                {{^missing}}
+                    <tr class="option">
+                        <td class="center">
+                            <input type="{{inputtype}}" name="{{inputname}}" value="{{optionid}}" id="choiceid_{{optionid}}"
+                                {{#checked}}checked{{/checked}} {{#disabled}}disabled{{/disabled}}>
+                        </td>
+                        <td>
+                            <label for="choiceid_{{optionid}}">{{name}}</label>{{#full}} <em>{{#str}}full, choicegroup{{/str}}</em>{{/full}}
+                            <div class="choicegroups-descriptions{{#descriptionshidden}} hidden{{/descriptionshidden}}"
+                                id="choicegroup-description-{{optionid}}">{{{description}}}</div>
+                        </td>
+                        {{#showresults}}
+                            <td class="center">{{count}}{{#limitanswers}} / {{maxanswers}}{{/limitanswers}}</td>
+                        {{/showresults}}
+                        {{#showmembers}}
+                            <td class="center">
+                                <div class="choicegroups-membersnames hidden" id="choicegroup_{{optionid}}">
+                                    {{#members}}{{^first}}<br>{{/first}}{{name}}{{/members}}
+                                </div>
+                            </td>
+                        {{/showmembers}}
+                    </tr>
+                {{/missing}}
+            {{/rows}}
+        </table>
+    </div>
+    {{#multiple}}
+        <input type="hidden" name="number_of_groups" value="{{numberofgroups}}">
+        {{#mappings}}
+            <input type="hidden" name="{{name}}" value="{{groupid}}">
+        {{/mappings}}
+    {{/multiple}}
+    <div class="clearfloat"></div>
+    <input type="hidden" name="sesskey" value="{{sesskey}}">
+    <input type="hidden" name="id" value="{{cmid}}">
+    {{#hascapability}}
+        {{#allfull}}
+            <p>{{#str}}choicegroupfull, choicegroup{{/str}}</p>
+        {{/allfull}}
+        {{#cansubmit}}
+            <button type="submit" value="{{#str}}savemychoicegroup, choicegroup{{/str}}" class="btn btn-primary"
+                {{#hidesubmit}}style="display: none"{{/hidesubmit}}>{{#str}}savemychoicegroup, choicegroup{{/str}}</button>
+        {{/cansubmit}}
+        {{#removeurl}}
+            <a href="{{removeurl}}">{{#str}}removemychoicegroup, choicegroup{{/str}}</a>
+        {{/removeurl}}
+    {{/hascapability}}
+    {{#havetologin}}
+        <p>{{#str}}havetologin, choicegroup{{/str}}</p>
+    {{/havetologin}}
+</form>

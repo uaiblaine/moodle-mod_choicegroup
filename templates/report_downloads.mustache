@@ -1,0 +1,40 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_choicegroup/report_downloads
+
+    The download buttons of the responses report.
+
+    Context variables required for this template:
+    * buttons - one per format: button, the rendered single button (HTML)
+
+    Example context (json):
+    {
+        "buttons": [
+            {"button": "<button type=\"submit\" class=\"btn btn-secondary\">Download in ODS format</button>"},
+            {"button": "<button type=\"submit\" class=\"btn btn-secondary\">Download in text format</button>"}
+        ]
+    }
+}}
+<div class="downloadreport">
+    <ul>
+        {{#buttons}}
+            <li class="reportoption mt-1">{{{button}}}</li>
+        {{/buttons}}
+    </ul>
+    <div class="clearfloat"></div>
+</div>

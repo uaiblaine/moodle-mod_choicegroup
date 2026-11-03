@@ -21,13 +21,17 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(['jquery'], function($) {
-    return {
-        init: function() {
-            $('.selectallnone a').on('click', function(e) {
-                e.preventDefault();
-                $('#attemptsform').find('input:checkbox').prop('checked', $(this).data('selectInfo'));
+/**
+ * Listen to the Select all and Deselect all links: data-select-info="1" ticks every checkbox of the form, "0" unticks.
+ */
+export const init = () => {
+    document.querySelectorAll('.selectallnone a').forEach((link) => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const checked = link.dataset.selectInfo === '1';
+            document.querySelectorAll('#attemptsform input[type="checkbox"]').forEach((checkbox) => {
+                checkbox.checked = checked;
             });
-        }
-    };
-});
+        });
+    });
+};
