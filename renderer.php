@@ -186,10 +186,13 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
                 format_string($group->name),
                 ['for' => 'choiceid_' . $option->attributes->value]
             );
-            $groupmembers = get_enrolled_users($context, '', $group->id, 'u.*', 'u.lastname, u.firstname', 0, 0, $onlyactive);
+            // The count is the group's real size (the limit applies to every member); the names follow core's group
+            // visibility, so a member of a group whose membership is hidden is not listed to everyone.
+            $userfields = 'u.id' . \core_user\fields::for_name()->get_sql('u')->selects;
+            $groupmembers = get_enrolled_users($context, '', $group->id, $userfields, 'u.lastname, u.firstname', 0, 0, $onlyactive);
             $groupmembersnames = [];
-            foreach ($groupmembers as $groupmember) {
-                $groupmembersnames[] = fullname($groupmember);
+            foreach (choicegroup_filter_visible_members($group, $groupmembers) as $groupmember) {
+                $groupmembersnames[] = s(fullname($groupmember));
             }
 
             if (
@@ -204,14 +207,18 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
             $hidden = ($groupdescriptionstate == CHOICEGROUP_GROUPDESCRIPTIONSTATE_HIDDEN) ? "hidden" : "";
             $labeltext .= html_writer::tag(
                 'div',
-                format_text(file_rewrite_pluginfile_urls(
-                    $group->description,
-                    'pluginfile.php',
-                    $context->id,
-                    'group',
-                    'description',
-                    $group->id
-                )),
+                format_text(
+                    file_rewrite_pluginfile_urls(
+                        $group->description,
+                        'pluginfile.php',
+                        $context->id,
+                        'group',
+                        'description',
+                        $group->id
+                    ),
+                    $group->descriptionformat,
+                    ['context' => $context]
+                ),
                 ['class' => "choicegroups-descriptions {$hidden}"]
             );
 
@@ -231,7 +238,7 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
                 ($showresults == CHOICEGROUP_SHOWRESULTS_AFTER_CLOSE && !$choicegroupopen)
             ) {
                 $maxanswers = ($limitanswers) ? (' / ' . $option->maxanswers) : ('');
-                $html .= html_writer::tag('td', count($groupmembersnames) . $maxanswers, ['class' => 'center']);
+                $html .= html_writer::tag('td', count($groupmembers) . $maxanswers, ['class' => 'center']);
                 if ($publish == CHOICEGROUP_PUBLISH_NAMES) {
                     $groupmembershtml = html_writer::tag(
                         'div',
@@ -283,31 +290,28 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
     }
 
     /**
-     * Returns HTML to display choicegroups result
+     * Returns the HTML of the results, named or anonymous according to the publish setting.
+     *
      * @param object $choicegroups
      * @param bool $forcepublish
-     * @return string
+     * @return string|void The HTML, or nothing when the viewer may not see the results
      */
     public function display_result($choicegroups, $forcepublish = false) {
         if (empty($forcepublish)) { // Allow the publish setting to be overridden.
             $forcepublish = $choicegroups->publish;
         }
 
-        $displaylayout = ($choicegroups) ? ($choicegroups->display) : (CHOICEGROUP_DISPLAY_HORIZONTAL);
-
         if ($forcepublish) {  // CHOICEGROUP_PUBLISH_NAMES.
             return $this->display_publish_name_vertical($choicegroups);
-        } else { // CHOICEGROUP_PUBLISH_ANONYMOUS'.
-            if ($displaylayout == CHOICEGROUP_DISPLAY_HORIZONTAL_LAYOUT) {
-                return $this->display_publish_anonymous_horizontal($choicegroups);
-            }
-
-            return $this->display_publish_anonymous_vertical($choicegroups);
+        } else { // CHOICEGROUP_PUBLISH_ANONYMOUS.
+            // There is no vertical anonymous display (it was never written): the vertical layout falls back to the
+            // horizontal one instead of calling a method that does not exist.
+            return $this->display_publish_anonymous_horizontal($choicegroups);
         }
     }
 
     /**
-     * Returns HTML to display choicegroups result
+     * Returns the HTML of the results with the names of the users listed under each group.
      *
      * @param object $choicegroups
      * @return string|void
@@ -324,7 +328,7 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
         }
 
         if (!has_capability('mod/choicegroup:downloadresponses', $context)) {
-            return; // Only the (editing)teacher can see the diagram.
+            return; // Only users who can download the responses see the results.
         }
 
         if (!$choicegroups) {
@@ -412,7 +416,7 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
                         $userlink = new moodle_url('/user/view.php', ['id' => $user->id, 'course' => $choicegroups->courseid]);
                         $name = html_writer::tag(
                             'a',
-                            fullname($user, $choicegroups->fullnamecapability),
+                            s(fullname($user, $choicegroups->fullnamecapability)),
                             ['href' => $userlink, 'class' => 'username']
                         );
                         $data .= html_writer::tag('div', $name, ['class' => 'fullname']);
@@ -469,15 +473,16 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
 
 
     /**
-     * Returns HTML to display choicegroups result
+     * Returns the HTML of the results as a table of counts, without the names of the users.
+     *
      * @param object $choicegroups
-     * @return string
+     * @return string|void The HTML, or nothing when the viewer may not see the results
      */
     public function display_publish_anonymous_horizontal($choicegroups) {
         global $context;
 
         if (!has_capability('mod/choicegroup:downloadresponses', $context)) {
-            return; // Only the (editing)teacher can see the diagram.
+            return; // Only users who can download the responses see the results.
         }
 
         $table = new html_table();
@@ -506,7 +511,7 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
             }
 
             $displaydiagram = html_writer::tag('img', '', ['style' => 'height:50px; width:' . $width . 'px', 'alt' => '',
-                'src' => $this->output->pix_url('row', 'choicegroup'), ]);
+                'src' => $this->output->image_url('row', 'choicegroup'), ]);
 
             $skiplink = html_writer::tag(
                 'a',

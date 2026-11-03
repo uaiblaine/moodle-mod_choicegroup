@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * The mod_choicegroup post created event.
+ * The mod_choicegroup choice updated event.
  *
  * @package    mod_choicegroup
  * @copyright  2014 Dan Poltawski <dan@moodle.com>
@@ -25,18 +25,18 @@
 namespace mod_choicegroup\event;
 
 /**
- * The mod_choicegroup post created event class.
+ * The mod_choicegroup choice updated event class, triggered when a user is added to the group they chose.
+ *
+ * The object is the choicegroup instance; relateduserid is the user whose membership changed, who is not the acting
+ * user when a teacher removes a student's choice.
  *
  * @property-read array $other {
  *      Extra information about the event.
  *
- *      - int discussionid: The discussion id the post is part of.
- *      - int choicegroupid: The choicegroup id the post is part of.
- *      - string choicegrouptype: The type of choicegroup the post is part of.
+ *      - int groupid: The group the user joined or left.
  * }
  *
  * @package    mod_choicegroup
- * @since      Moodle 2.7
  * @copyright  2014 Dan Poltawski <dan@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -49,7 +49,7 @@ class choice_updated extends \core\event\base {
     protected function init() {
         $this->data['crud'] = 'c';
         $this->data['edulevel'] = self::LEVEL_PARTICIPATING;
-        $this->data['objecttable'] = 'groups';
+        $this->data['objecttable'] = 'choicegroup';
     }
 
     /**
@@ -60,6 +60,8 @@ class choice_updated extends \core\event\base {
     public function get_description() {
         $a = new \stdClass();
         $a->userid = $this->userid;
+        $a->relateduserid = $this->relateduserid;
+        $a->groupid = $this->other['groupid'];
         $a->contextinstanceid = $this->contextinstanceid;
         return get_string('event:answered_desc', 'mod_choicegroup', $a);
     }
@@ -80,5 +82,41 @@ class choice_updated extends \core\event\base {
      */
     public function get_url() {
         return new \moodle_url('/mod/choicegroup/view.php', ['id' => $this->contextinstanceid]);
+    }
+
+    /**
+     * Custom validation.
+     *
+     * @return void
+     * @throws \coding_exception When the affected user or the group is missing
+     */
+    protected function validate_data() {
+        parent::validate_data();
+
+        if (!isset($this->relateduserid)) {
+            throw new \coding_exception('The \'relateduserid\' must be set.');
+        }
+
+        if (!isset($this->other['groupid'])) {
+            throw new \coding_exception('The \'groupid\' value must be set in other.');
+        }
+    }
+
+    /**
+     * Map the object id on restore.
+     *
+     * @return array
+     */
+    public static function get_objectid_mapping() {
+        return ['db' => 'choicegroup', 'restore' => 'choicegroup'];
+    }
+
+    /**
+     * Map the group id in other on restore.
+     *
+     * @return array
+     */
+    public static function get_other_mapping() {
+        return ['groupid' => ['db' => 'groups', 'restore' => 'group']];
     }
 }

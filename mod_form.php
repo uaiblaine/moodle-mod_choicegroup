@@ -48,7 +48,6 @@ class mod_choicegroup_mod_form extends moodleform_mod {
 
         $mform =& $this->_form;
 
-        // -------------------------------------------------------------------------------
         $mform->addElement('header', 'general', get_string('general', 'form'));
 
         $mform->addElement('text', 'name', get_string('choicegroupname', 'choicegroup'), ['size' => '64']);
@@ -66,11 +65,7 @@ class mod_choicegroup_mod_form extends moodleform_mod {
             $this->add_intro_editor(true, get_string('description'));
         }
 
-        // -------------------------------------------------------------------------------
-
-        // -------------------------
         // Fetch data from database.
-        // -------------------------.
 
         $choicegroupid = $this->get_instance();
 
@@ -79,11 +74,13 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         }
 
         $groups = [];
+        $coursecontext = context_course::instance($COURSE->id);
         $dbgroups = $DB->get_records('groups', ['courseid' => $COURSE->id], $this->sortgroupsby);
 
         foreach ($dbgroups as $group) {
             $groups[$group->id] = new stdClass();
-            $groups[$group->id]->name = format_string($group->name);
+            // Plain text here, escaped with s() where it goes into an option or a title attribute.
+            $groups[$group->id]->name = format_string($group->name, true, ['context' => $coursecontext, 'escape' => false]);
             $groups[$group->id]->timecreated = $group->timecreated;
             $groups[$group->id]->mentioned = false;
             $groups[$group->id]->id = $group->id;
@@ -103,7 +100,11 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         if ($dbgroupings) {
             foreach ($dbgroupings as $grouping) {
                 $groupings[$grouping->id] = new stdClass();
-                $groupings[$grouping->id]->name = $grouping->name;
+                $groupings[$grouping->id]->name = format_string(
+                    $grouping->name,
+                    true,
+                    ['context' => $coursecontext, 'escape' => false]
+                );
                 $groupings[$grouping->id]->timecreated = $grouping->timecreated;
             }
 
@@ -122,12 +123,7 @@ class mod_choicegroup_mod_form extends moodleform_mod {
             }
         }
 
-        // -------------------------
-        // -------------------------
-
-        // -------------------------
-        // Continue generating form
-        // -------------------------.
+        // Continue generating the form.
         $mform->addElement('header', 'miscellaneoussettingshdr', get_string('miscellaneoussettings', 'form'));
         $mform->setExpanded('miscellaneoussettingshdr');
         $mform->addElement('checkbox', 'multipleenrollmentspossible', get_string('multipleenrollmentspossible', 'choicegroup'));
@@ -180,9 +176,7 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         $mform->addElement('button', 'setlimit', get_string('applytoallgroups', 'choicegroup'));
         $mform->disabledIf('setlimit', 'limitanswers', 'neq', 1);
 
-        // -------------------------
-        // Generate the groups section of the form
-        // -------------------------.
+        // Generate the groups section of the form.
 
         $mform->addElement('header', 'groups', get_string('groupsheader', 'choicegroup'));
         $mform->addElement('html', '
@@ -205,16 +199,15 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         foreach ($groupings as $groupingid => $grouping) {
             // Find all linked groups to this grouping.
             if (isset($grouping->linkedGroupsIDs)) {
-                // Grouping has more than 2 items, thus we should display it (otherwise it would be clearer to display only that
-                // single group alone).
+                // Only groupings that link at least one group are listed.
                 $mform->addElement('html', '<option value="' . $groupingid .
                     '" style="font-weight: bold" class="grouping" data-timecreated="' . $grouping->timecreated . '">' .
-                    get_string('char_bullet_expanded', 'choicegroup') . $grouping->name . '</option>');
+                    get_string('char_bullet_expanded', 'choicegroup') . s($grouping->name) . '</option>');
                 foreach ($grouping->linkedGroupsIDs as $linkedgroupid) {
                     if (isset($groups[$linkedgroupid])) {
-                        $mform->addElement('html', '<option title="' . $groups[$linkedgroupid]->name . '" value="' .
+                        $mform->addElement('html', '<option title="' . s($groups[$linkedgroupid]->name) . '" value="' .
                             $linkedgroupid . '" class="group nested" data-timecreated="' .
-                            $groups[$linkedgroupid]->timecreated . '">' . $groups[$linkedgroupid]->name . '</option>');
+                            $groups[$linkedgroupid]->timecreated . '">' . s($groups[$linkedgroupid]->name) . '</option>');
                         $groups[$linkedgroupid]->mentioned = true;
                     }
                 }
@@ -223,8 +216,8 @@ class mod_choicegroup_mod_form extends moodleform_mod {
 
         foreach ($groups as $group) {
             if ($group->mentioned === false) {
-                $mform->addElement('html', '<option title="' . $group->name . '" value="' . $group->id .
-                    '" class="group toplevel" data-timecreated="' . $group->timecreated . '">' . format_string($group->name) .
+                $mform->addElement('html', '<option title="' . s($group->name) . '" value="' . $group->id .
+                    '" class="group toplevel" data-timecreated="' . $group->timecreated . '">' . s($group->name) .
                     '</option>');
             }
         }
@@ -312,11 +305,8 @@ class mod_choicegroup_mod_form extends moodleform_mod {
             $descriptionoptions
         );
         $mform->setDefault('defaultgroupdescriptionstate', $groupdescriptionstate);
-        // -------------------------
-        // Go on the with the remainder of the form.
-        // -------------------------.
+        // Go on with the remainder of the form.
 
-        // -------------------------------------------------------------------------------
         $mform->addElement('header', 'timerestricthdr', get_string('timerestrict', 'choicegroup'));
         $mform->addElement('checkbox', 'timerestrict', get_string('timerestrict', 'choicegroup'));
 
@@ -326,9 +316,7 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         $mform->addElement('date_time_selector', 'timeclose', get_string("choicegroupclose", "choicegroup"));
         $mform->disabledIf('timeclose', 'timerestrict');
 
-        // -------------------------------------------------------------------------------
         $this->standard_coursemodule_elements();
-        // -------------------------------------------------------------------------------
         $this->add_action_buttons();
     }
 
@@ -362,7 +350,7 @@ class mod_choicegroup_mod_form extends moodleform_mod {
         global $PAGE;
         $params = [
             'formid' => $this->_form->getAttribute('id'),
-            'sortgroupsby' => $this->sortgroupsby
+            'sortgroupsby' => $this->sortgroupsby,
         ];
 
         $PAGE->requires->js_call_amd('mod_choicegroup/choicegroupsetting', 'init', [$params]);
@@ -410,6 +398,13 @@ class mod_choicegroup_mod_form extends moodleform_mod {
 
         if (count($groupids) < 1) {
             $errors['groups'] = get_string('fillinatleastoneoption', 'choicegroup');
+        } else {
+            // The field is a hidden input the browser can rewrite: every id must be a group of this course.
+            $courseid = (int)$this->get_course()->id;
+            $validgroupids = choicegroup_parse_selected_groups($data['serializedselectedgroups'], $courseid);
+            if (count(array_unique(array_map('trim', $groupids))) !== count($validgroupids)) {
+                $errors['groups'] = get_string('groupnotincourse', 'choicegroup');
+            }
         }
 
         if (!empty($data['multipleenrollmentspossible'])) {

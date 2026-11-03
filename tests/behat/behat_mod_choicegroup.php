@@ -28,7 +28,7 @@
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
 /**
- * Steps definitions related to mod_feedback.
+ * Steps definitions related to mod_choicegroup.
  *
  * @copyright 2025 Université de Lausanne
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

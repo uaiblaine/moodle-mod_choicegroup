@@ -16,12 +16,13 @@
 /**
  * Choice group settings JavaScript module
  *
+ * @module     mod_choicegroup/choicegroupsetting
  * @copyright  2025 UNIL
  * @author     Pierre Guarnieri <pierre.guarnieri@unil.ch>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-define(function() {
+define(['core/notification', 'core/str'], function(Notification, Str) {
 
     return {
         init: function(param) {
@@ -36,7 +37,7 @@ define(function() {
             const serializedselectedgroups = document.getElementById('serializedselectedgroups');
             const ARROW_DOWN = '\u25BC';
             const ARROW_RIGHT = '\u25B6';
-            const removedOptionsMap = new Map(); // Used to store options states when toggle grouping
+            const removedOptionsMap = new Map(); // Used to store options states when a grouping is toggled.
             let sortBy = param.sortgroupsby;
 
             const enableDisableLimit = document.getElementById('id_limitanswers');
@@ -53,12 +54,12 @@ define(function() {
                 return;
             }
 
-            // Store original indexes states
+            // Store original indexes states.
             Array.from(availableSelect.options).forEach((opt, index) => {
                 opt.dataset.originalIndex = index;
             });
 
-            // On form load
+            // On form load.
             if (serializedselectedgroups.value !== '') {
                 let selectedGroups = serializedselectedgroups.value.split(';').filter(n => n !== '');
                 let inSelected = [];
@@ -73,21 +74,21 @@ define(function() {
                 moveToSelected();
             }
 
-            // Check if elements exist
+            // Check if elements exist.
             if (!availableSelect || !selectedSelect) {
                 return;
             }
 
             let groupingStates = {};
 
-            // Initialize grouping states
+            // Initialize grouping states.
             Array.from(availableSelect.options).forEach(opt => {
                 if (opt.classList.contains('grouping')) {
                     groupingStates[opt.value] = true;
                 }
             });
 
-            // Setup event listeners
+            // Setup event listeners.
             setupEventListeners();
 
             /**
@@ -136,7 +137,10 @@ define(function() {
 
                 form.addEventListener('submit', function(e) {
                     if (selectedSelect.options.length < 1 && !window.skipClientValidation) {
-                        alert(M.util.get_string('pleaseselectonegroup', 'choicegroup'));
+                        Notification.alert(
+                            Str.get_string('error', 'core'),
+                            M.util.get_string('pleaseselectonegroup', 'choicegroup')
+                        );
                         e.preventDefault();
                         e.stopPropagation();
                         return;
@@ -153,7 +157,7 @@ define(function() {
                 applyLimitToAllGroups.addEventListener('click', applyLimit);
 
                 ['click', 'change'].forEach(event => {
-                    selectedSelect.addEventListener(event, function (e) {
+                    selectedSelect.addEventListener(event, function(e) {
                         let selectedOptions = Array.from(selectedSelect.selectedOptions);
                         if (selectedOptions.length === 1 && enableDisableLimit.value === '1') {
                             e.preventDefault();
@@ -179,7 +183,10 @@ define(function() {
                         }
                         if (isNaN(limitInput.value)) {
                             limitInput.value = 0;
-                            alert(M.util.get_string('the_value_you_entered_is_not_a_number', 'choicegroup'));
+                            Notification.alert(
+                                Str.get_string('error', 'core'),
+                                M.util.get_string('the_value_you_entered_is_not_a_number', 'choicegroup')
+                            );
                             return;
                         }
 
@@ -321,7 +328,7 @@ define(function() {
                     if (sortBy === 'name') {
                         return a.text.localeCompare(b.text);
                     } else if (sortBy === 'timecreated') {
-                        // Assumes timecreated is stored as a data attribute
+                        // Assumes timecreated is stored as a data attribute.
                         const timeA = Number(a.dataset.timecreated || 0);
                         const timeB = Number(b.dataset.timecreated || 0);
                         return timeA - timeB;
@@ -390,7 +397,10 @@ define(function() {
                         limit.value = generalLimitValue;
                     });
                 } else {
-                    alert(M.util.get_string('the_value_you_entered_is_not_a_number', 'choicegroup'));
+                    Notification.alert(
+                        Str.get_string('error', 'core'),
+                        M.util.get_string('the_value_you_entered_is_not_a_number', 'choicegroup')
+                    );
                 }
 
                 updateLimitOfAllSelectedGroups();
@@ -431,13 +441,13 @@ define(function() {
                         newOpt.dataset.originalIndex = String(origIndex);
                         newOpt.dataset.originalIndexes = JSON.stringify(originalIndexes);
 
-                        toRestore.push({ index: Number(origIndex), option: newOpt });
+                        toRestore.push({index: Number(origIndex), option: newOpt});
                     });
                 });
 
                 toRestore.sort((a, b) => a.index - b.index);
 
-                toRestore.forEach(({ index, option }) => {
+                toRestore.forEach(({index, option}) => {
                     const nextOpt = Array.from(availableSelect.options).find(o => Number(o.dataset.originalIndex) > index);
                     if (nextOpt) {
                         availableSelect.add(option, nextOpt);

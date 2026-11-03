@@ -277,7 +277,7 @@ class AddonModChoiceGroupProvider {
     submitResponses(id, name, courseId, cmId, data, allowOffline, siteId) {
         siteId = siteId || context.CoreSitesProvider.getCurrentSiteId();
 
-        // Convenience function to store the delete to be synchronized later.
+        // Convenience function to store the responses to be synchronized later.
         var storeOffline = () => {
             return choiceGroupOffline.saveResponses(id, name, courseId, cmId, data, false, siteId).then(() => {
                 return false;
@@ -293,7 +293,7 @@ class AddonModChoiceGroupProvider {
         return choiceGroupOffline.deleteResponse(id, siteId).catch(() => {
             // Nothing was stored already.
         }).then(() => {
-            // Now try to delete the responses in the server.
+            // Now try to submit the responses to the server.
             return this.submitResponsesOnline(id, data, siteId).then(() => {
                 return true;
             }).catch((error) => {
@@ -314,7 +314,7 @@ class AddonModChoiceGroupProvider {
      * @param id Group choice ID to submit.
      * @param data The responses to send.
      * @param siteId Site ID. If not defined, current site.
-     * @return Promise resolved if deleted, rejected if failure.
+     * @return Promise resolved if submitted, rejected if failure.
      */
     submitResponsesOnline(id, data, siteId) {
         return context.CoreSitesProvider.getSite(siteId).then((site) => {
@@ -326,7 +326,7 @@ class AddonModChoiceGroupProvider {
             return site.write('mod_choicegroup_submit_choicegroup_response', params).then((response) => {
 
                 if (!response || response.status === false) {
-                    // Couldn't delete the responses. Reject the promise.
+                    // Couldn't submit the responses. Reject the promise.
                     var error = response && response.warnings && response.warnings[0] ?
                             response.warnings[0] : new context.CoreError('');
 
@@ -358,7 +358,7 @@ class AddonModChoiceGroupSyncProvider extends this.CoreSyncBaseProvider {
     /**
      * Try to synchronize all the group choices in a certain site or in all sites.
      *
-     * @param force Wether to force sync not depending on last execution.
+     * @param force Whether to force sync not depending on last execution.
      * @return Promise resolved if sync is successful, rejected if sync fails.
      */
     syncAllChoiceGroups(force) {
@@ -366,10 +366,10 @@ class AddonModChoiceGroupSyncProvider extends this.CoreSyncBaseProvider {
                 context.CoreSitesProvider.getCurrentSiteId());
     }
 
-    /*
+    /**
      * Sync all pending group choices on a site.
      *
-     * @param force Wether to force sync not depending on last execution.
+     * @param force Whether to force sync not depending on last execution.
      * @param siteId Site ID to sync.
      * @return Promise resolved if sync is successful, rejected if sync fails.
      */
@@ -536,7 +536,7 @@ class AddonModChoiceGroupSyncCronHandler {
      * Execute the process.
      *
      * @param siteId ID of the site affected, undefined for all sites.
-     * @param force Wether the execution is forced (manual sync).
+     * @param force Whether the execution is forced (manual sync).
      * @return Promise resolved when done, rejected if failure.
      */
     execute(siteId, force) {

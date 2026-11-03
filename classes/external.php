@@ -23,10 +23,16 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_multiple_structure;
+use core_external\external_single_structure;
+use core_external\external_value;
+use core_external\external_warnings;
+
 defined('MOODLE_INTERNAL') || die;
 
 require_once($CFG->libdir . '/completionlib.php');
-require_once($CFG->libdir . '/externallib.php');
 require_once($CFG->dirroot . '/mod/choicegroup/lib.php');
 
 /**
@@ -53,14 +59,18 @@ class mod_choicegroup_external extends external_api {
     /**
      * Returns the options list for the provided choice group instance.
      *
+     * Another user's choice is returned only to a caller who may read the responses; the Moodle App passes the
+     * caller's own id ({@see \mod_choicegroup\output\mobile::mobile_course_view()}).
+     *
      * @param int $choicegroupid The choice group id.
      * @param int $userid The user id.
      * @param boolean $alloptionsdisabled True when all the options should be disabled,
      * because activity is not open or a limit has been reached.
      * @return array The choice group options.
+     * @throws moodle_exception When the instance does not exist
      */
     public static function get_choicegroup_options($choicegroupid, $userid, $alloptionsdisabled = false) {
-        global $CFG, $choicegroupgroups;
+        global $USER;
 
         $result = [];
         $returnedoptions = [];
@@ -71,23 +81,49 @@ class mod_choicegroup_external extends external_api {
             'userid' => $userid,
         ];
         $params = self::validate_parameters(self::get_choicegroup_options_parameters(), $params);
-        $choicegroup = choicegroup_get_choicegroup($choicegroupid);
-        $cm = get_coursemodule_from_instance('choicegroup', $choicegroupid);
+        if (!$choicegroup = choicegroup_get_choicegroup($params['choicegroupid'])) {
+            throw new moodle_exception('invalidcoursemodule', 'error');
+        }
+
+        $cm = get_coursemodule_from_instance('choicegroup', $choicegroup->id, 0, false, MUST_EXIST);
         $context = context_module::instance($cm->id);
 
         self::validate_context($context);
         require_capability('mod/choicegroup:choose', $context);
 
+        $userid = empty($params['userid']) ? (int)$USER->id : (int)$params['userid'];
+        if ($userid !== (int)$USER->id) {
+            require_capability('mod/choicegroup:readresponses', $context);
+
+            // The capability says the caller may read responses, not that this user is theirs to read.
+            if (!is_enrolled($context, $userid)) {
+                throw new moodle_exception('notenrolledchoose', 'choicegroup');
+            }
+
+            // Same rule as choicegroup_delete_responses(): under separate groups the target must share a group.
+            if (
+                groups_get_activity_groupmode($cm) == SEPARATEGROUPS &&
+                !has_capability('moodle/site:accessallgroups', $context)
+            ) {
+                $allowedgroupids = array_map('intval', array_keys(groups_get_activity_allowed_groups($cm, $USER->id)));
+                $usergroupids = array_map('intval', array_keys(groups_get_all_groups($cm->course, $userid)));
+                if (!array_intersect($usergroupids, $allowedgroupids)) {
+                    throw new required_capability_exception($context, 'mod/choicegroup:readresponses', 'nopermissions', '');
+                }
+            }
+        }
+
         $groupmode = groups_get_activity_groupmode($cm);
         $allresponses = choicegroup_get_response_data($choicegroup, $cm, $groupmode, $choicegroup->onlyactive);
         $answers = choicegroup_get_user_answer($choicegroup, $userid, true);
+        $choicegroupgroups = choicegroup_get_groups($choicegroup);
 
         foreach ($choicegroup->option as $optionid => $text) {
             if (isset($text)) {
                 $option = [];
                 $option['id'] = $optionid;
                 $option['groupid'] = $text;
-                $option['name'] = $choicegroupgroups[$text]->name;
+                $option['name'] = format_string($choicegroupgroups[$text]->name, true, ['context' => $context]);
                 $option['maxanswers'] = $choicegroup->maxanswers[$optionid];
                 $option['displaylayout'] = $choicegroup->display;
 
@@ -191,16 +227,7 @@ class mod_choicegroup_external extends external_api {
         self::validate_context($context);
         require_capability('mod/choicegroup:choose', $context);
 
-        $event = \mod_choicegroup\event\course_module_viewed::create([
-            'objectid' => $choicegroup->id,
-            'context' => $context,
-        ]);
-        $event->add_record_snapshot('course', $course);
-        $event->add_record_snapshot('choicegroup', $choicegroup);
-        $event->trigger();
-
-        $completion = new completion_info($course);
-        $completion->set_module_viewed($cm);
+        choicegroup_view($choicegroup, $course, $cm, $context);
 
         $result = [];
         $result['status'] = true;
@@ -247,14 +274,14 @@ class mod_choicegroup_external extends external_api {
     }
 
     /**
-     * Returns the options list for the provided choice group instance.
+     * Save the current user's choice in the provided choice group instance.
      *
      * @param int $choicegroupid The choice group id.
      * @param array $data The user responses.
-     * @return array The choice group options.
+     * @return array Status and warnings.
      */
     public static function submit_choicegroup_response($choicegroupid, $data) {
-        global $CFG, $DB, $USER;
+        global $USER;
 
         $warnings = [];
 
@@ -265,7 +292,7 @@ class mod_choicegroup_external extends external_api {
 
         $params = self::validate_parameters(self::submit_choicegroup_response_parameters(), $params);
 
-        if (!$choicegroup = choicegroup_get_choicegroup($choicegroupid)) {
+        if (!$choicegroup = choicegroup_get_choicegroup($params['choicegroupid'])) {
             throw new moodle_exception('invalidcoursemodule', 'error');
         }
 
@@ -278,51 +305,18 @@ class mod_choicegroup_external extends external_api {
         if (!empty($choicegroup->timeopen) && ($choicegroup->timeopen > $timenow)) {
             throw new moodle_exception('notopenyet', 'choicegroup', '', userdate($choicegroup->timeopen));
         } else if (!empty($choicegroup->timeclose) && ($timenow > $choicegroup->timeclose)) {
-            throw new moodle_exception('expired', 'choicegroup', '', userdate($choice->timeclose));
+            throw new moodle_exception('expired', 'choicegroup', '', userdate($choicegroup->timeclose));
         }
 
         $responses = self::parse_data_to_responses(
-            $data,
+            $params['data'],
             $choicegroup->multipleenrollmentspossible
         );
-        if (empty($responses)) {
-            // Update completion state.
-            $completion = new completion_info($course);
-            if ($completion->is_enabled($cm) && $choicegroup->completionsubmit) {
-                $completion->update_state($cm, COMPLETION_INCOMPLETE);
-            }
-        }
 
-        if (!choicegroup_get_user_answer($choicegroup, $USER) || $choicegroup->allowupdate) {
-            if ($choicegroup->multipleenrollmentspossible) {
-                foreach ($choicegroup->option as $optionid => $text) {
-                    if (in_array($optionid, $responses)) {
-                        choicegroup_user_submit_response($optionid, $choicegroup, $USER->id, $course, $cm);
-                    } else {
-                        // Remove group selection if selected.
-                        if (groups_is_member($text, $USER->id)) {
-                            $answervaluegroup = $DB->get_record('groups', ['id' => $text], 'id, name', MUST_EXIST);
-                            groups_remove_member($answervaluegroup->id, $USER->id);
-                            $eventparams = [
-                                'context' => $context,
-                                'objectid' => $choicegroup->id,
-                            ];
-                            $event = \mod_choicegroup\event\choice_removed::create($eventparams);
-                            $event->add_record_snapshot('course_modules', $cm);
-                            $event->add_record_snapshot('course', $course);
-                            $event->add_record_snapshot('choicegroup', $choicegroup);
-                            $event->trigger();
-                        }
-                    }
-                }
-            } else { // When !multipleenrollmentspossible.
-                if (count($responses) == 1) {
-                    $responses = reset($responses);
-                    choicegroup_user_submit_response($responses, $choicegroup, $USER->id, $course, $cm);
-                }
-            }
-        } else {
-            throw new moodle_exception('missingrequiredcapability', 'webservice', '', 'allowupdate');
+        // A single choice with no answer posted changes nothing, as before. Every other submission goes through the
+        // helper view.php uses: enrolment, dates, allowupdate, options of this instance, minimum and maximum.
+        if ($choicegroup->multipleenrollmentspossible || count($responses) == 1) {
+            choicegroup_save_user_choices($choicegroup, $USER->id, $course, $cm, $responses);
         }
 
         $result = [];
@@ -332,7 +326,7 @@ class mod_choicegroup_external extends external_api {
     }
 
     /**
-     * Describes the submit_response return value.
+     * Describes the submit_choicegroup_response return value.
      *
      * @return external_single_structure
      */
@@ -384,14 +378,14 @@ class mod_choicegroup_external extends external_api {
     }
 
     /**
-     * Delete the given submitted responses in a choice group
+     * Remove the current user's own choice in a choice group, when the instance allows updating a single choice.
      *
      * @param int $choicegroupid The choicegroup instance id
      * @return array status information and warnings
      * @throws moodle_exception
      */
     public static function delete_choicegroup_responses($choicegroupid) {
-        global $USER, $DB;
+        global $USER;
 
         $status = false;
         $warnings = [];
@@ -400,9 +394,9 @@ class mod_choicegroup_external extends external_api {
             'choicegroupid' => $choicegroupid,
         ];
 
-        $params = self::validate_parameters(self::submit_choicegroup_response_parameters(), $params);
+        $params = self::validate_parameters(self::delete_choicegroup_responses_parameters(), $params);
 
-        if (!$choicegroup = choicegroup_get_choicegroup($choicegroupid)) {
+        if (!$choicegroup = choicegroup_get_choicegroup($params['choicegroupid'])) {
             throw new moodle_exception('invalidcoursemodule', 'error');
         }
 
@@ -415,15 +409,13 @@ class mod_choicegroup_external extends external_api {
         if (!empty($choicegroup->timeopen) && ($choicegroup->timeopen > $timenow)) {
             throw new moodle_exception('notopenyet', 'choicegroup', '', userdate($choicegroup->timeopen));
         } else if (!empty($choicegroup->timeclose) && ($timenow > $choicegroup->timeclose)) {
-            throw new moodle_exception('expired', 'choicegroup', '', userdate($choice->timeclose));
+            throw new moodle_exception('expired', 'choicegroup', '', userdate($choicegroup->timeclose));
         }
 
         $answergiven = choicegroup_get_user_answer($choicegroup, $USER, true);
         if (!empty($answergiven)) {
             if ($choicegroup->allowupdate && !$choicegroup->multipleenrollmentspossible) {
-                $params = ['groupid' => reset($answergiven)->id, 'userid' => $USER->id];
-                $groupmember = $DB->get_record('groups_members', $params, 'id', MUST_EXIST);
-                $status = choicegroup_delete_responses([$groupmember->id], $choicegroup, $cm, $course);
+                $status = choicegroup_user_remove_choice($choicegroup, $USER->id, $course, $cm);
             } else {
                 throw new moodle_exception('missingrequiredcapability', 'webservice', '', 'allowupdate');
             }
@@ -442,7 +434,7 @@ class mod_choicegroup_external extends external_api {
     /**
      * Describes the delete_choicegroup_responses return value.
      *
-     * @return external_multiple_structure
+     * @return external_single_structure
      */
     public static function delete_choicegroup_responses_returns() {
         return new external_single_structure(

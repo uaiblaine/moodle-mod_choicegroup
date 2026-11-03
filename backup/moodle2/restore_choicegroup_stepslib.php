@@ -86,17 +86,22 @@ class restore_choicegroup_activity_structure_step extends restore_activity_struc
         $data->choicegroupid = $this->get_new_parentid('choicegroup');
         $data->timemodified = $this->apply_date_offset($data->timemodified);
 
-        // Check if the groupid exists in this course.
-        $group = $DB->record_exists_sql('SELECT g.id FROM {groups} g
-                            WHERE g.courseid = ? and g.id = ?', [$this->get_courseid(), $data->groupid]);
-        if (!$group) {
-            // It does not exist in the course already, so try to map the groupid.
-            $data->groupid = $this->get_mappingid('group', $data->groupid);
-            if (!$data->groupid) {
+        // The group mapping comes first: the raw id belongs to the source site, where it may name an unrelated group
+        // that happens to carry the same id in the target course.
+        $groupid = $this->get_mappingid('group', $data->groupid);
+        if (!$groupid) {
+            // No group in the backup (duplicating an activity within its course): keep the raw id only when it is a
+            // group of the target course.
+            $samecourse = $DB->record_exists('groups', ['id' => $data->groupid, 'courseid' => $this->get_courseid()]);
+            if (!$samecourse) {
                 // The group does not exist, so the option should not be added.
                 return;
             }
+
+            $groupid = $data->groupid;
         }
+
+        $data->groupid = $groupid;
 
         $newitemid = $DB->insert_record('choicegroup_options', $data);
         $this->set_mapping('choicegroup_option', $oldid, $newitemid);

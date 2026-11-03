@@ -1,0 +1,1 @@
+s/if \(!is_enrolled\(\$context, \$userid\)\) \{\n                throw new moodle_exception\(\x27notenrolledchoose\x27/if (false) {\n                throw new moodle_exception(\x27notenrolledchoose\x27/ or die "s32 did not match";

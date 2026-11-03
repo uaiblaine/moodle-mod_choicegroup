@@ -1,0 +1,1 @@
+s/    if \(!is_enrolled\(\$context, \$userid, \x27mod\/choicegroup:choose\x27\)\) \{\n        throw new moodle_exception\(\x27notenrolledchoose\x27, \x27choicegroup\x27\);\n    \}\n\n//  or die "s04 did not match";

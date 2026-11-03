@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information
+ * Admin settings for mod_choicegroup
  *
  * @package    mod_choicegroup
  * @copyright  2013 Université de Lausanne

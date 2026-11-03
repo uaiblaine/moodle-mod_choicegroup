@@ -80,54 +80,32 @@ if (!$context = context_module::instance($cm->id)) {
     throw new moodle_exception('badcontext');
 }
 
-$eventparams = [
-    'context' => $context,
-    'objectid' => $choicegroup->id,
-];
-
 $current = choicegroup_get_user_answer($choicegroup, $USER);
-if (
-    $action == 'delchoicegroup' && confirm_sesskey() && is_enrolled($context, null, 'mod/choicegroup:choose') &&
-    $choicegroup->allowupdate && !($choicegroup->timeclose && (time() > $choicegroup->timeclose))
-) {
-    // User wants to delete his own choice.
-    if ($current !== false) {
-        if (groups_is_member($current->id, $USER->id)) {
-            $currentgroup = $DB->get_record('groups', ['id' => $current->id], 'id,name', MUST_EXIST);
-            groups_remove_member($current->id, $USER->id);
-            $event = \mod_choicegroup\event\choice_removed::create($eventparams);
-            $event->add_record_snapshot('course_modules', $cm);
-            $event->add_record_snapshot('course', $course);
-            $event->add_record_snapshot('choicegroup', $choicegroup);
-            $event->trigger();
-        }
-
-        $current = choicegroup_get_user_answer($choicegroup, $USER, false, true);
-        // Update completion state.
-        $completion = new completion_info($course);
-        if ($completion->is_enabled($cm) && $choicegroup->completionsubmit) {
-            $completion->update_state($cm, COMPLETION_INCOMPLETE);
-        }
-    }
+if ($action == 'delchoicegroup' && confirm_sesskey()) {
+    // User wants to delete his own choice; the helper enforces enrolment, the dates and allowupdate.
+    choicegroup_user_remove_choice($choicegroup, $USER->id, $course, $cm);
+    $current = choicegroup_get_user_answer($choicegroup, $USER, false, true);
 }
 
 $PAGE->set_title(format_string($choicegroup->name));
 $PAGE->set_heading($course->fullname);
 
-// Mark as viewed.
-$completion = new completion_info($course);
-$completion->set_module_viewed($cm);
+// Mark as viewed and log the view, before any output.
+choicegroup_view($choicegroup, $course, $cm, $context);
 
 // Submit any new data if there is any.
 if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') && confirm_sesskey()) {
     if ($choicegroup->multipleenrollmentspossible == 1) {
-        $numberofgroups = optional_param('number_of_groups', '', PARAM_INT);
+        // The form posts one checkbox per option; a larger number posted by hand is capped to the options there are.
+        $numberofgroups = min(optional_param('number_of_groups', 0, PARAM_INT), count($choicegroup->option));
         $enrollmentscount = 0;
+        $selectedoptionids = [];
 
         for ($i = 0; $i < $numberofgroups; $i++) {
             $answervalue = optional_param('answer_' . $i, '', PARAM_INT);
             if ($answervalue != '') {
                 $enrollmentscount++;
+                $selectedoptionids[] = (int)$answervalue;
             }
         }
 
@@ -147,28 +125,16 @@ if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') &&
             }
         }
 
-        for ($i = 0; $i < $numberofgroups; $i++) {
-            $answervalue = optional_param('answer_' . $i, '', PARAM_INT);
-            if ($answervalue != '') {
-                choicegroup_user_submit_response($answervalue, $choicegroup, $USER->id, $course, $cm);
-            } else {
-                $answervaluegroupid = optional_param('answer_' . $i . '_groupid', '', PARAM_INT);
-                if (groups_is_member($answervaluegroupid, $USER->id)) {
-                    $answervaluegroup = $DB->get_record('groups', ['id' => $answervaluegroupid], 'id,name', MUST_EXIST);
-                    groups_remove_member($answervaluegroupid, $USER->id);
-                    $event = \mod_choicegroup\event\choice_removed::create($eventparams);
-                    $event->add_record_snapshot('course_modules', $cm);
-                    $event->add_record_snapshot('course', $course);
-                    $event->add_record_snapshot('choicegroup', $choicegroup);
-                    $event->trigger();
-                }
-            }
-        }
+        // The helper removes the user from this instance's option groups left unticked, so the posted
+        // answer_N_groupid values, which could name any group of the site, are not read.
+        choicegroup_save_user_choices($choicegroup, $USER->id, $course, $cm, $selectedoptionids);
     } else { // Multipleenrollmentspossible != 1.
         $timenow = time();
         if (has_capability('mod/choicegroup:deleteresponses', $context)) {
             if ($action == 'delete') { // Some responses need to be deleted.
-                choicegroup_delete_responses($userids, $choicegroup, $cm, $course); // Delete responses.
+                // The posted values are user ids; choicegroup_delete_responses() takes groups_members ids.
+                $grpsmemberids = choicegroup_get_membership_ids($choicegroup, $userids);
+                choicegroup_delete_responses($grpsmemberids, $choicegroup, $cm, $course); // Delete responses.
                 redirect("view.php?id=$cm->id");
             }
         }
@@ -181,7 +147,7 @@ if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') &&
                 ['id' => $cm->id, 'notify' => 'mustchooseone', 'sesskey' => sesskey()]
             ));
         } else {
-            choicegroup_user_submit_response($answer, $choicegroup, $USER->id, $course, $cm);
+            choicegroup_save_user_choices($choicegroup, $USER->id, $course, $cm, [$answer]);
             redirect(new moodle_url(
                 '/mod/choicegroup/view.php',
                 ['id' => $cm->id, 'notify' => 'choicegroupsaved', 'sesskey' => sesskey()]
@@ -193,12 +159,6 @@ if (data_submitted() && is_enrolled($context, null, 'mod/choicegroup:choose') &&
 
 // Display the choicegroup and possibly results.
 
-
-$event = \mod_choicegroup\event\course_module_viewed::create($eventparams);
-$event->add_record_snapshot('course_modules', $cm);
-$event->add_record_snapshot('course', $course);
-$event->add_record_snapshot('choicegroup', $choicegroup);
-$event->trigger();
 
 echo $OUTPUT->header();
 if ($CFG->branch < 400) {
@@ -236,7 +196,6 @@ if ($groupmode) {
     groups_print_activity_menu($cm, $CFG->wwwroot . '/mod/choicegroup/view.php?id=' . $id);
 }
 
-// Big function, approx 6 SQL calls per user.
 $allresponses = choicegroup_get_response_data($choicegroup, $cm, $groupmode, $choicegroup->onlyactive);
 
 
@@ -393,7 +352,8 @@ if (isguestuser()) {
     echo $OUTPUT->box_end();
 }
 
-// Print the results at the bottom of the screen.
+// When the results are visible the report block is already printed above, so this branch stays empty on purpose;
+// the others print why no results are shown.
 // phpcs:disable Generic.CodeAnalysis.EmptyStatement
 if (
     $choicegroup->showresults == CHOICEGROUP_SHOWRESULTS_ALWAYS ||

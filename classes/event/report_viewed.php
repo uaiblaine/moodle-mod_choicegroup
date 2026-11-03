@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * The mod_choicegroup course module viewed event.
+ * The mod_choicegroup report viewed event.
  *
  * @package    mod_choicegroup
  * @copyright  2014 Université de Lausanne

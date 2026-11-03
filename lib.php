@@ -48,7 +48,7 @@ define('CHOICEGROUP_SORTGROUPS_NAME', '2');
 define('CHOICEGROUP_GROUPDESCRIPTIONSTATE_HIDDEN', 0);
 define('CHOICEGROUP_GROUPDESCRIPTIONSTATE_VISIBLE', 1);
 
-// Ugly hack to make 3.11 and 4.0 work seamlessly.
+// Kept for parity with upstream, which still supports Moodle versions that predate these constants.
 if (!defined('FEATURE_MOD_PURPOSE')) {
     define('FEATURE_MOD_PURPOSE', 'mod_purpose');
 }
@@ -57,7 +57,7 @@ if (!defined('MOD_PURPOSE_COLLABORATION')) {
     define('MOD_PURPOSE_COLLABORATION', 'collaboration');
 }
 
-// For versions of Moodle prior to 5.1, we need to define that constant here.
+// Same upstream-parity guard: core defines this constant from Moodle 5.1.
 if (!defined('FEATURE_MOD_OTHERPURPOSE')) {
     define('FEATURE_MOD_OTHERPURPOSE', 'mod_otherpurpose');
 }
@@ -114,70 +114,81 @@ function choicegroup_user_outline($course, $user, $mod, $choicegroup) {
  * @throws dml_exception
  */
 function choicegroup_get_user_answer($choicegroup, $user, $returnarray = false, $refresh = false) {
-    global $DB, $choicegroupgroups;
-
-    static $useranswers = [];
+    global $DB;
 
     if (is_numeric($user)) {
-        $userid = $user;
+        $userid = (int)$user;
     } else {
-        $userid = $user->id;
+        $userid = (int)$user->id;
     }
 
-    if (!$refresh && isset($useranswers[$userid])) {
-        if ($returnarray === true) {
-            return $useranswers[$userid];
-        } else {
-            return $useranswers[$userid][0];
-        }
-    } else {
-        $useranswers = [];
-    }
+    $choicegroupid = is_numeric($choicegroup) ? (int)$choicegroup : (int)$choicegroup->id;
 
-    if (!is_array($choicegroupgroups) || !count($choicegroupgroups)) {
-            $choicegroupgroups = choicegroup_get_groups($choicegroup);
-    }
+    // Keyed by instance and user: one request reads several instances (the course overview, custom completion,
+    // a web service batch), and a cache keyed by user alone returned the first instance's answer for all of them.
+    $cache = choicegroup_get_request_cache();
+    $cachekey = 'answer_' . $choicegroupid . '_' . $userid;
+    $groups = $refresh ? false : $cache->get($cachekey);
 
-    $groupids = [];
-    foreach ($choicegroupgroups as $group) {
-        if (is_numeric($group->id)) {
-            $groupids[] = $group->id;
-        }
-    }
-
-    if ($groupids) {
-        $params1 = [$userid];
-        [$insql, $params2] = $DB->get_in_or_equal($groupids);
-        $params = array_merge($params1, $params2);
-        $groupmemberships = $DB->get_records_sql('SELECT * FROM {groups_members} WHERE userid = ? AND groupid ' . $insql, $params);
+    if ($groups === false) {
         $groups = [];
-        foreach ($groupmemberships as $groupmembership) {
-            $group = $choicegroupgroups[$groupmembership->groupid];
-            $group->timeuseradded = $groupmembership->timeadded;
-            $groups[] = $group;
-        }
-
-        if (count($groups) > 0) {
-            $useranswers[$userid] = $groups;
-            if ($returnarray === true) {
-                return $groups;
-            } else {
-                return $groups[0];
+        $choicegroupgroups = choicegroup_get_groups($choicegroupid);
+        if ($choicegroupgroups) {
+            [$insql, $params] = $DB->get_in_or_equal(array_keys($choicegroupgroups));
+            $params = array_merge([$userid], $params);
+            $groupmemberships = $DB->get_records_sql(
+                'SELECT * FROM {groups_members} WHERE userid = ? AND groupid ' . $insql . ' ORDER BY id',
+                $params
+            );
+            foreach ($groupmemberships as $groupmembership) {
+                $group = clone $choicegroupgroups[$groupmembership->groupid];
+                $group->timeuseradded = $groupmembership->timeadded;
+                $groups[] = $group;
             }
         }
+
+        // A miss is not cached, as upstream did not: a membership another code path adds in this request must show.
+        if ($groups) {
+            $cache->set($cachekey, $groups);
+        }
     }
 
-    return false;
+    if (!$groups) {
+        return false;
+    }
+
+    return ($returnarray === true) ? $groups : $groups[0];
 }
 
 /**
- * Check if the user has answered the choicegroup.
+ * The request-scoped cache that holds the groups, answers and response data of each instance.
+ *
+ * A request cache rather than function statics: it is keyed per instance by its callers, and PHPUnit resets it between
+ * tests, where reset sequences hand the next test the same instance ids.
+ *
+ * @return \core_cache\loader_interface
+ */
+function choicegroup_get_request_cache() {
+    return \core_cache\cache::make_from_params(\core_cache\store::MODE_REQUEST, 'mod_choicegroup', 'requestdata');
+}
+
+/**
+ * Forget every cached answer and response of this request, after the plugin changed a membership.
+ *
+ * @return void
+ */
+function choicegroup_purge_request_cache() {
+    choicegroup_get_request_cache()->purge();
+}
+
+/**
+ * Print the option the user has chosen in the choicegroup, or a notice that none was chosen.
  *
  * @param object $course
  * @param object $user
  * @param object $mod
  * @param object $choicegroup
- * @return string|void
+ * @return void
  */
 function choicegroup_user_complete($course, $user, $mod, $choicegroup) {
     if ($groupmembership = choicegroup_get_user_answer($choicegroup, $user)) { // If user has answered.
@@ -214,20 +225,16 @@ function choicegroup_add_instance($choicegroup) {
 
     // Deserialize the selected groups.
 
-    $groupids = explode(';', $choicegroup->serializedselectedgroups);
-    $groupids = array_diff($groupids, [ '' ]);
-    // Only add unique groups as groups can be in multiple groupings.
-    $groupids = array_unique($groupids);
+    $groupids = choicegroup_parse_selected_groups($choicegroup->serializedselectedgroups ?? '', (int)$choicegroup->course);
 
     foreach ($groupids as $groupid) {
-        $groupid = trim($groupid);
-        if (isset($groupid) && $groupid != '') {
+        if (!empty($groupid)) {
             $option = new stdClass();
             $option->groupid = $groupid;
             $option->choicegroupid = $choicegroup->id;
             $property = 'group_' . $groupid . '_limit';
             if (isset($choicegroup->$property)) {
-                $option->maxanswers = $choicegroup->$property;
+                $option->maxanswers = (int)$choicegroup->$property;
             }
 
             $option->timemodified = time();
@@ -245,7 +252,42 @@ function choicegroup_add_instance($choicegroup) {
         );
     }
 
+    choicegroup_purge_request_cache();
+
     return $choicegroup->id;
+}
+
+/**
+ * Parse the group ids the settings form serialises into `serializedselectedgroups`.
+ *
+ * The field is a hidden input the browser can rewrite, so only integer ids of groups of this course survive, once each
+ * (a group can be offered through several groupings).
+ *
+ * @param string $serialized Group ids separated by `;`
+ * @param int $courseid The course the activity belongs to
+ * @return int[] The valid group ids, in the order they were given
+ */
+function choicegroup_parse_selected_groups($serialized, $courseid) {
+    global $DB;
+
+    $groupids = [];
+    foreach (explode(';', (string)$serialized) as $groupid) {
+        $groupid = trim($groupid);
+        if ($groupid !== '' && ctype_digit($groupid)) {
+            $groupids[(int)$groupid] = (int)$groupid;
+        }
+    }
+
+    if (!$groupids) {
+        return [];
+    }
+
+    [$insql, $params] = $DB->get_in_or_equal(array_keys($groupids));
+    $params[] = $courseid;
+    $coursegroupids = $DB->get_fieldset_select('groups', 'id', "id $insql AND courseid = ?", $params);
+    $coursegroupids = array_map('intval', $coursegroupids);
+
+    return array_values(array_intersect($groupids, $coursegroupids));
 }
 
 /**
@@ -273,24 +315,26 @@ function choicegroup_update_instance($choicegroup) {
 
     // Deserialize the selected groups.
 
-    $groupids = explode(';', $choicegroup->serializedselectedgroups);
-    $groupids = array_diff($groupids, [ '' ]);
-    // Only add unique groups as groups can be in multiple groupings.
-    $groupids = array_unique($groupids);
+    if (isset($choicegroup->serializedselectedgroups)) {
+        $groupids = choicegroup_parse_selected_groups($choicegroup->serializedselectedgroups, (int)$choicegroup->course);
 
-    // Prepare pre-existing selected groups from database.
-    $preexistinggroups = $DB->get_records("choicegroup_options", ["choicegroupid" => $choicegroup->id], "id");
+        // Prepare pre-existing selected groups from database.
+        $preexistinggroups = $DB->get_records("choicegroup_options", ["choicegroupid" => $choicegroup->id], "id");
+    } else {
+        // A caller without the group picker (the bulk completion form) keeps the options as they are.
+        $groupids = [];
+        $preexistinggroups = [];
+    }
 
     // Walk through form-selected groups.
     foreach ($groupids as $groupid) {
-        $groupid = trim($groupid);
-        if (isset($groupid) && $groupid != '') {
+        if (!empty($groupid)) {
             $option = new stdClass();
             $option->groupid = $groupid;
             $option->choicegroupid = $choicegroup->id;
             $property = 'group_' . $groupid . '_limit';
             if (isset($choicegroup->$property)) {
-                $option->maxanswers = $choicegroup->$property;
+                $option->maxanswers = (int)$choicegroup->$property;
             }
 
             $option->timemodified = time();
@@ -324,6 +368,8 @@ function choicegroup_update_instance($choicegroup) {
             $completiontimeexpected
         );
     }
+
+    choicegroup_purge_request_cache();
 
     return $DB->update_record('choicegroup', $choicegroup);
 }
@@ -383,8 +429,8 @@ function choicegroup_prepare_options($choicegroup, $user, $coursemodule, $allres
         }
     }
 
-    $cdisplay['hascapability'] = is_enrolled($context, null, 'mod/choicegroup:choose'); // Only enrolled users are
-    // allowed to make a choicegroup.
+    // Only enrolled users are allowed to make a choicegroup.
+    $cdisplay['hascapability'] = is_enrolled($context, null, 'mod/choicegroup:choose');
 
     if ($choicegroup->allowupdate && is_array($answers)) {
         $cdisplay['allowupdate'] = true;
@@ -401,9 +447,9 @@ function choicegroup_prepare_options($choicegroup, $user, $coursemodule, $allres
  * @throws \moodle_exception
  */
 function check_restrictions($choicegroup, $userid) {
+    // Only the dates are checked here. Enrolment, the capability and allowupdate are rules of a change, which need the
+    // module context: they live in choicegroup_check_user_can_change(), which calls this function.
     check_date_restrictions($choicegroup);
-    // phpcs:disable moodle.Commenting.TodoComment
-    // TODO check other restrictions.
 }
 
 
@@ -414,20 +460,229 @@ function check_restrictions($choicegroup, $userid) {
  * @throws \moodle_exception
  */
 function check_date_restrictions($choicegroup) {
-    if ($choicegroup->timeopen !== '0' && time() < $choicegroup->timeopen) {
-        throw new moodle_exception(get_string('activitydate:notavailableyet', 'mod_choicegroup'));
+    // Empty rather than !== '0': a record built in code carries the integer 0, which is never identical to '0'.
+    if (!empty($choicegroup->timeopen) && time() < $choicegroup->timeopen) {
+        throw new moodle_exception('activitydate:notavailableyet', 'choicegroup');
     }
 
-    if ($choicegroup->timeclose !== '0' && time() > $choicegroup->timeclose) {
-        throw new moodle_exception(get_string('activitydate:exceeded', 'mod_choicegroup'));
+    if (!empty($choicegroup->timeclose) && time() > $choicegroup->timeclose) {
+        throw new moodle_exception('activitydate:exceeded', 'choicegroup');
     }
+}
+
+/**
+ * Check that a user may change their own choice in this instance now, whatever the change is.
+ *
+ * The one place the rules of a self-service change live, shared by view.php and the web services: the user is
+ * enrolled with mod/choicegroup:choose, the activity is open, and a user who already holds a choice may change or
+ * remove it only when the instance allows updates.
+ *
+ * @param object $choicegroup The instance record
+ * @param int $userid The user whose choice changes
+ * @param context_module $context The module context
+ * @return void
+ * @throws moodle_exception When the change is not allowed
+ */
+function choicegroup_check_user_can_change($choicegroup, $userid, $context) {
+    if (!is_enrolled($context, $userid, 'mod/choicegroup:choose')) {
+        throw new moodle_exception('notenrolledchoose', 'choicegroup');
+    }
+
+    check_restrictions($choicegroup, $userid);
+
+    if (empty($choicegroup->allowupdate) && choicegroup_get_user_answer($choicegroup, $userid, false, true) !== false) {
+        throw new moodle_exception('updatenotallowed', 'choicegroup');
+    }
+}
+
+/**
+ * Return the group ids this instance offers, read from its options.
+ *
+ * @param object $choicegroup The instance record
+ * @return int[] Group ids, keyed by option id
+ */
+function choicegroup_get_option_groupids($choicegroup) {
+    global $DB;
+
+    $groupids = $DB->get_records_menu('choicegroup_options', ['choicegroupid' => $choicegroup->id], 'id', 'id, groupid');
+
+    return array_map('intval', $groupids);
+}
+
+/**
+ * Save the set of options a user chose, adding and removing their memberships to match it.
+ *
+ * Every self-service change goes through here, from view.php and from the web services alike, so both enforce the
+ * same rules: {@see choicegroup_check_user_can_change()}, every option belongs to this instance, and the number of
+ * options respects the instance's minimum and maximum (multiple enrolments) or is exactly one (single choice).
+ *
+ * @param object $choicegroup The instance record
+ * @param int $userid The user who chooses
+ * @param object $course Course record
+ * @param object $cm Course module record
+ * @param int[] $optionids The choicegroup_options ids the user wants to hold
+ * @return void
+ * @throws moodle_exception When a rule refuses the change
+ */
+function choicegroup_save_user_choices($choicegroup, $userid, $course, $cm, array $optionids) {
+    global $DB;
+
+    $userid = (int)$userid;
+    $context = context_module::instance($cm->id);
+
+    choicegroup_check_user_can_change($choicegroup, $userid, $context);
+
+    $optiongroupids = choicegroup_get_option_groupids($choicegroup);
+    $optionids = array_values(array_unique(array_map('intval', $optionids)));
+    foreach ($optionids as $optionid) {
+        if (!isset($optiongroupids[$optionid])) {
+            throw new moodle_exception('invalidoption', 'choicegroup');
+        }
+    }
+
+    if (empty($choicegroup->multipleenrollmentspossible)) {
+        if (count($optionids) !== 1) {
+            throw new moodle_exception('mustchooseone', 'choicegroup');
+        }
+
+        choicegroup_user_submit_response(reset($optionids), $choicegroup, $userid, $course, $cm);
+        return;
+    }
+
+    $count = count($optionids);
+    if (!empty($choicegroup->maxenrollments) && $count > $choicegroup->maxenrollments) {
+        throw new moodle_exception('mustchoosemax', 'choicegroup', '', $choicegroup->maxenrollments);
+    }
+
+    if (!empty($choicegroup->minenrollments) && $count < $choicegroup->minenrollments) {
+        throw new moodle_exception('mustchoosemin', 'choicegroup', '', $choicegroup->minenrollments);
+    }
+
+    // One transaction for the whole set: a later option that hits a full group throws after earlier additions and
+    // removals were written, and the user would be left in a state nobody chose. Core buffers the events until the
+    // commit and drops them on a rollback.
+    $transaction = $DB->start_delegated_transaction();
+    try {
+        foreach ($optiongroupids as $optionid => $groupid) {
+            if (in_array($optionid, $optionids, true)) {
+                if (!groups_is_member($groupid, $userid)) {
+                    choicegroup_user_submit_response($optionid, $choicegroup, $userid, $course, $cm);
+                }
+            } else {
+                choicegroup_remove_member($choicegroup, $groupid, $userid, $course, $cm);
+            }
+        }
+        $transaction->allow_commit();
+    } catch (\Exception $e) {
+        // The request cache was refilled inside the transaction with rows that are about to vanish.
+        choicegroup_purge_request_cache();
+        $transaction->rollback($e);
+    }
+}
+
+/**
+ * Remove a user's own choice, all of it or one group of it.
+ *
+ * The self-service removal of view.php ("Remove my choice") and of the delete web service; it follows the same rules
+ * as a change ({@see choicegroup_check_user_can_change()}), and a group id must be one this instance offers.
+ *
+ * @param object $choicegroup The instance record
+ * @param int $userid The user whose choice is removed
+ * @param object $course Course record
+ * @param object $cm Course module record
+ * @param int|null $groupid One group to leave, or null for every group of this instance
+ * @return bool True when a membership was removed
+ * @throws moodle_exception When a rule refuses the removal
+ */
+function choicegroup_user_remove_choice($choicegroup, $userid, $course, $cm, $groupid = null) {
+    $userid = (int)$userid;
+    $context = context_module::instance($cm->id);
+
+    $optiongroupids = choicegroup_get_option_groupids($choicegroup);
+    if ($groupid !== null && !in_array((int)$groupid, $optiongroupids, true)) {
+        throw new moodle_exception('invalidoption', 'choicegroup');
+    }
+
+    if (choicegroup_get_user_answer($choicegroup, $userid, false, true) === false) {
+        return false;
+    }
+
+    choicegroup_check_user_can_change($choicegroup, $userid, $context);
+
+    $removed = false;
+    foreach ($optiongroupids as $optiongroupid) {
+        if ($groupid === null || $optiongroupid === (int)$groupid) {
+            $removed = choicegroup_remove_member($choicegroup, $optiongroupid, $userid, $course, $cm) || $removed;
+        }
+    }
+
+    return $removed;
+}
+
+/**
+ * Remove a user from one of this instance's groups, log it and update completion.
+ *
+ * @param object $choicegroup The instance record
+ * @param int $groupid The group, already known to be one of this instance's options
+ * @param int $userid The user leaving the group
+ * @param object $course Course record
+ * @param object $cm Course module record
+ * @return bool True when the user was a member and was removed
+ */
+function choicegroup_remove_member($choicegroup, $groupid, $userid, $course, $cm) {
+    global $CFG;
+    require_once($CFG->libdir . '/completionlib.php');
+
+    if (!groups_is_member($groupid, $userid)) {
+        return false;
+    }
+
+    groups_remove_member($groupid, $userid);
+    choicegroup_purge_request_cache();
+
+    $event = \mod_choicegroup\event\choice_removed::create([
+        'context' => context_module::instance($cm->id),
+        'objectid' => $choicegroup->id,
+        'relateduserid' => $userid,
+        'other' => ['groupid' => (int)$groupid],
+    ]);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('course', $course);
+    $event->add_record_snapshot('choicegroup', choicegroup_get_snapshot_record($choicegroup));
+    $event->trigger();
+
+    // Update completion state.
+    $completion = new completion_info($course);
+    if (
+        $completion->is_enabled($cm) && !empty($choicegroup->completionsubmit) &&
+        choicegroup_get_user_answer($choicegroup, $userid, false, true) === false
+    ) {
+        $completion->update_state($cm, COMPLETION_INCOMPLETE, $userid);
+    }
+
+    return true;
+}
+
+/**
+ * Return the instance as its database row, for an event snapshot.
+ *
+ * choicegroup_get_choicegroup() adds the option arrays to the row; a snapshot keeps the table's columns only.
+ *
+ * @param object $choicegroup The instance, possibly with the option arrays
+ * @return stdClass
+ */
+function choicegroup_get_snapshot_record($choicegroup) {
+    $record = clone $choicegroup;
+    unset($record->option, $record->maxanswers, $record->grpmemberid);
+
+    return $record;
 }
 
 /**
  * Process user submitted answers for a choicegroup,
  * and either updating them or saving new answers.
  *
- * @param int $formanswer
+ * @param int $formanswer The choicegroup_options id of the chosen option
  * @param object $choicegroup
  * @param int $userid
  * @param object $course Course object
@@ -438,67 +693,89 @@ function choicegroup_user_submit_response($formanswer, $choicegroup, $userid, $c
     global $DB, $CFG;
     require_once($CFG->libdir . '/completionlib.php');
 
+    $userid = (int)$userid;
     $context = context_module::instance($cm->id);
     $eventparams = [
         'context' => $context,
         'objectid' => $choicegroup->id,
+        'relateduserid' => $userid,
     ];
 
     check_restrictions($choicegroup, $userid);
 
-    $selectedoption = $DB->get_record('choicegroup_options', ['id' => $formanswer]);
-
-    $current = choicegroup_get_user_answer($choicegroup, $userid);
-    if ($current) {
-        $currentgroup = $DB->get_record('groups', ['id' => $current->id], 'id,name', MUST_EXIST);
+    // The option is resolved within this instance, and its group within this course: an option id of another
+    // activity would otherwise add the user to any group of the site.
+    $selectedoption = $DB->get_record('choicegroup_options', ['id' => $formanswer, 'choicegroupid' => $choicegroup->id]);
+    if (!$selectedoption || !$DB->record_exists('groups', ['id' => $selectedoption->groupid, 'courseid' => $course->id])) {
+        throw new moodle_exception('invalidoption', 'choicegroup');
     }
 
-    $selectedgroup = $DB->get_record('groups', ['id' => $selectedoption->groupid], 'id,name', MUST_EXIST);
+    $selectedoption->groupid = (int)$selectedoption->groupid;
+    $eventparams['other'] = ['groupid' => $selectedoption->groupid];
+
+    $current = choicegroup_get_user_answer($choicegroup, $userid, false, true);
+    $alreadymember = groups_is_member($selectedoption->groupid, $userid);
 
     $countanswers = 0;
-    groups_add_member($selectedoption->groupid, $userid);
     $groupmemberadded = true;
     if ($choicegroup->limitanswers) {
-        $groupmember = $DB->get_record('groups_members', ['groupid' => $selectedoption->groupid, 'userid' => $userid]);
-        $selectcount = 'groupid=' . $selectedoption->groupid . ' and id<=' . $groupmember->id;
-        $countanswers = $DB->count_records_select('groups_members', $selectcount);
-        $maxans = $choicegroup->maxanswers[$formanswer];
-        if ($countanswers > $maxans) {
-            groups_remove_member($selectedoption->groupid, $userid);
-            $groupmemberadded = false;
+        // The add and the count run under one lock per group: two requests that both added before either counted
+        // would both see themselves within the limit and overfill the group.
+        $lock = \core\lock\lock_config::get_lock_factory('mod_choicegroup')->get_lock(
+            'group_' . $selectedoption->groupid,
+            5
+        );
+        if (!$lock) {
+            throw new moodle_exception('locktimeout');
         }
+
+        try {
+            groups_add_member($selectedoption->groupid, $userid);
+            $groupmember = $DB->get_record('groups_members', ['groupid' => $selectedoption->groupid, 'userid' => $userid]);
+            $countanswers = $DB->count_records_select(
+                'groups_members',
+                'groupid = ? AND id <= ?',
+                [$selectedoption->groupid, $groupmember->id]
+            );
+            $maxans = (int)$selectedoption->maxanswers;
+            if ($countanswers > $maxans && !$alreadymember) {
+                groups_remove_member($selectedoption->groupid, $userid);
+                $groupmemberadded = false;
+            }
+        } finally {
+            $lock->release();
+        }
+    } else {
+        groups_add_member($selectedoption->groupid, $userid);
     }
 
+    choicegroup_purge_request_cache();
+
     if ($groupmemberadded) {
+        if (!$alreadymember) {
+            $event = \mod_choicegroup\event\choice_updated::create($eventparams);
+            $event->add_record_snapshot('course_modules', $cm);
+            $event->add_record_snapshot('course', $course);
+            $event->add_record_snapshot('choicegroup', choicegroup_get_snapshot_record($choicegroup));
+            $event->trigger();
+        }
+
         if ($current) {
             if (!($choicegroup->multipleenrollmentspossible == 1)) {
                 if ($selectedoption->groupid != $current->id) {
-                    if (groups_is_member($current->id, $userid)) {
-                        groups_remove_member($current->id, $userid);
-                        $event = \mod_choicegroup\event\choice_removed::create($eventparams);
-                        $event->add_record_snapshot('course_modules', $cm);
-                        $event->add_record_snapshot('course', $course);
-                        $event->add_record_snapshot('choicegroup', $choicegroup);
-                        $event->trigger();
-                    }
+                    choicegroup_remove_member($choicegroup, (int)$current->id, $userid, $course, $cm);
                 }
             }
         } else {
             // Update completion state.
             $completion = new completion_info($course);
             if ($completion->is_enabled($cm) && $choicegroup->completionsubmit) {
-                $completion->update_state($cm, COMPLETION_COMPLETE);
+                $completion->update_state($cm, COMPLETION_COMPLETE, $userid);
             }
-
-            $event = \mod_choicegroup\event\choice_updated::create($eventparams);
-            $event->add_record_snapshot('course_modules', $cm);
-            $event->add_record_snapshot('course', $course);
-            $event->add_record_snapshot('choicegroup', $choicegroup);
-            $event->trigger();
         }
     } else {
-        if (!$current || !($current->id == $selectedoption->groupid)) { // Check to see if current choicegroup already selected -
-            // if not display error.
+        // Check to see if the current choicegroup is already selected; if not, display the error.
+        if (!$current || !($current->id == $selectedoption->groupid)) {
             throw new moodle_exception('choicegroupfull', 'choicegroup', $CFG->wwwroot . '/mod/choicegroup/view.php?id=' . $cm->id);
         }
     }
@@ -538,6 +815,74 @@ function choicegroup_show_reportlink($choicegroup, $allresponses, $cm) {
 }
 
 /**
+ * Build the rows of the responses download: one row per user, identity columns as core decides.
+ *
+ * The identity columns are the ones core shows in this context ({@see \core_user\fields::get_identity_fields()}, the
+ * pattern of mod_choice's report), so email or idnumber leave the site only where the site shows them to this viewer.
+ * Custom profile fields are not included: the response data carries the user table's columns only.
+ *
+ * @param object $choicegroup The instance record
+ * @param object $course Course record
+ * @param context_module $context The module context
+ * @param array $users The response data of choicegroup_get_response_data()
+ * @return array Two keys: header (column titles) and rows (lists of cell values)
+ */
+function choicegroup_get_export_data($choicegroup, $course, $context, $users) {
+    $extrafields = \core_user\fields::get_identity_fields($context, false);
+
+    $header = [get_string('lastname'), get_string('firstname')];
+    foreach ($extrafields as $field) {
+        $header[] = \core_user\fields::get_display_name($field);
+    }
+
+    $header[] = get_string('group');
+    $header[] = get_string('choice', 'choicegroup');
+
+    $groupsids = array_keys(choicegroup_get_groups($choicegroup));
+    $rows = [];
+    $displayed = [];
+    foreach ($users ?: [] as $userlist) {
+        foreach ($userlist as $user) {
+            if (isset($displayed[$user->id])) {
+                continue;
+            }
+
+            $displayed[$user->id] = true;
+            $row = [$user->lastname, $user->firstname];
+            foreach ($extrafields as $field) {
+                $row[] = (string)($user->$field ?? '');
+            }
+
+            $ug2 = [];
+            if ($usergrps = groups_get_all_groups($course->id, $user->id)) {
+                foreach ($groupsids as $gid) {
+                    if (array_key_exists($gid, $usergrps)) {
+                        $ug2[] = format_string($usergrps[$gid]->name, true, ['context' => $context, 'escape' => false]);
+                    }
+                }
+            }
+
+            $row[] = implode(', ', $ug2);
+            $rows[] = $row;
+        }
+    }
+
+    return ['header' => $header, 'rows' => $rows];
+}
+
+/**
+ * Make a value safe for one cell of the tab-separated download.
+ *
+ * A tab or a line break inside a name would shift every following column or start a forged row.
+ *
+ * @param string $value The cell value
+ * @return string The value with tabs and line breaks replaced by spaces
+ */
+function choicegroup_clean_txt_cell($value) {
+    return str_replace(["\r\n", "\r", "\n", "\t"], ' ', (string)$value);
+}
+
+/**
  * Prepare the data for the report page.
  *
  * @param object $choicegroup
@@ -545,7 +890,7 @@ function choicegroup_show_reportlink($choicegroup, $allresponses, $cm) {
  * @param object $cm
  * @param array $allresponses
  * @param bool $forcepublish
- * @return object
+ * @return object|false The display data, or false (after printing a notice) when there are no responses
  */
 function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allresponses, $forcepublish = false) {
     global $CFG, $fullscript, $PAGE, $OUTPUT;
@@ -651,7 +996,7 @@ function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allrespon
                         echo $OUTPUT->user_picture($user, ['courseid' => $course->id]);
                         echo "</td><td class=\"fullname\">";
                         echo "<a href=\"$CFG->wwwroot/user/view.php?id=$user->id&amp;course=$course->id\">";
-                        echo fullname($user, $hascapfullnames);
+                        echo s(fullname($user, $hascapfullnames));
                         echo "</a>";
                         echo "</td></tr>";
                     }
@@ -680,7 +1025,7 @@ function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allrespon
                         echo $OUTPUT->user_picture($user, ['courseid' => $course->id]);
                         echo '</td><td class="fullname">';
                         echo "<a href=\"$CFG->wwwroot/user/view.php?id=$user->id&amp;course=$course->id\">";
-                        echo fullname($user, $hascapfullnames);
+                        echo s(fullname($user, $hascapfullnames));
                         echo '</a>';
                         echo '</td></tr>';
                     }
@@ -750,17 +1095,20 @@ function prepare_choicegroup_show_results($choicegroup, $course, $cm, $allrespon
 }
 
 /**
- * Delete all responses for the choicegroup.
+ * Remove the chosen memberships from the choicegroup's option groups.
  *
- * @param array $grpsmemberids
- * @param object $choicegroup Choice main table row
+ * The ids are groups_members ids posted by the report, so each is checked: only memberships of this instance's option
+ * groups are removed, and under separate groups only those the acting user can see, a group they may access or a
+ * member of one ({@see groups_get_activity_allowed_groups()}). Any other id is skipped.
+ *
+ * @param array $grpsmemberids groups_members ids
+ * @param object $choicegroup The instance record
  * @param object $cm Course-module object
  * @param object $course Course object
  * @return bool
  */
 function choicegroup_delete_responses($grpsmemberids, $choicegroup, $cm, $course) {
-    global $CFG, $DB;
-    require_once($CFG->libdir . '/completionlib.php');
+    global $DB, $USER;
 
     if (!is_array($grpsmemberids) || empty($grpsmemberids)) {
         return false;
@@ -773,34 +1121,65 @@ function choicegroup_delete_responses($grpsmemberids, $choicegroup, $cm, $course
     }
 
     $context = context_module::instance($cm->id);
-    $completion = new completion_info($course);
-    $eventparams = [
-        'context' => $context,
-        'objectid' => $choicegroup->id,
-    ];
+    $optiongroupids = choicegroup_get_option_groupids($choicegroup);
+
+    $allowedgroupids = null;
+    if (
+        groups_get_activity_groupmode($cm, $course) == SEPARATEGROUPS &&
+        !has_capability('moodle/site:accessallgroups', $context)
+    ) {
+        $allowedgroupids = array_map('intval', array_keys(groups_get_activity_allowed_groups($cm, $USER->id)));
+    }
 
     foreach ($grpsmemberids as $grpsmemberid) {
-        $groupsmember = $DB->get_record('groups_members', ['id' => $grpsmemberid], '*', MUST_EXIST);
-        $userid = $groupsmember->userid;
-        $groupid = $groupsmember->groupid;
-        $currentgroup = $DB->get_record('groups', ['id' => $groupid], 'id,name', MUST_EXIST);
-        if (groups_is_member($groupid, $userid)) {
-            groups_remove_member($groupid, $userid);
-            $event = \mod_choicegroup\event\choice_removed::create($eventparams);
-            $event->add_record_snapshot('course_modules', $cm);
-            $event->add_record_snapshot('course', $course);
-            $event->add_record_snapshot('choicegroup', $choicegroup);
-            $event->trigger();
+        $groupsmember = $DB->get_record('groups_members', ['id' => $grpsmemberid]);
+        if (!$groupsmember || !in_array((int)$groupsmember->groupid, $optiongroupids, true)) {
+            continue;
         }
 
-        // Update completion state.
-        $current = choicegroup_get_user_answer($choicegroup, $userid, false, true);
-        if ($current === false && $completion->is_enabled($cm) && $choicegroup->completionsubmit) {
-            $completion->update_state($cm, COMPLETION_INCOMPLETE, $userid);
+        $userid = (int)$groupsmember->userid;
+        $groupid = (int)$groupsmember->groupid;
+        if ($allowedgroupids !== null && !in_array($groupid, $allowedgroupids, true)) {
+            $usergroupids = array_map('intval', array_keys(groups_get_all_groups($course->id, $userid)));
+            if (!array_intersect($usergroupids, $allowedgroupids)) {
+                continue;
+            }
         }
+
+        choicegroup_remove_member($choicegroup, $groupid, $userid, $course, $cm);
     }
 
     return true;
+}
+
+/**
+ * Return the groups_members ids of the given users in this instance's option groups.
+ *
+ * view.php posts user ids where choicegroup_delete_responses() expects membership ids.
+ *
+ * @param object $choicegroup The instance record
+ * @param int[] $userids User ids
+ * @return int[] groups_members ids
+ */
+function choicegroup_get_membership_ids($choicegroup, array $userids) {
+    global $DB;
+
+    $userids = array_filter(array_map('intval', $userids));
+    $optiongroupids = choicegroup_get_option_groupids($choicegroup);
+    if (!$userids || !$optiongroupids) {
+        return [];
+    }
+
+    [$usersql, $userparams] = $DB->get_in_or_equal($userids);
+    [$groupsql, $groupparams] = $DB->get_in_or_equal(array_values($optiongroupids));
+    $ids = $DB->get_fieldset_select(
+        'groups_members',
+        'id',
+        "userid $usersql AND groupid $groupsql",
+        array_merge($userparams, $groupparams)
+    );
+
+    return array_map('intval', $ids);
 }
 
 
@@ -850,6 +1229,39 @@ function choicegroup_get_option_text($choicegroup, $id) {
 }
 
 /**
+ * Keep the members of a group whose membership the current user may see, as core's group visibility decides.
+ *
+ * Mirrors {@see \core_group\visibility::sql_member_visibility_where()}, which groups_get_members() applies: everyone
+ * sees an ALL group's members, members see a MEMBERS group's members, a user sees only themself in an OWN group, nobody
+ * sees a NONE group's members, and moodle/course:viewhiddengroups sees them all.
+ *
+ * @param stdClass $group The group record, with courseid and visibility
+ * @param array $members User records keyed by user id
+ * @return array The members the current user may see, keyed by user id
+ */
+function choicegroup_filter_visible_members($group, array $members) {
+    global $USER;
+
+    $visibility = (int)($group->visibility ?? GROUPS_VISIBILITY_ALL);
+    if ($visibility === GROUPS_VISIBILITY_ALL) {
+        return $members;
+    }
+
+    if (has_capability('moodle/course:viewhiddengroups', context_course::instance($group->courseid))) {
+        return $members;
+    }
+
+    switch ($visibility) {
+        case GROUPS_VISIBILITY_MEMBERS:
+            return groups_is_member($group->id, $USER->id) ? $members : [];
+        case GROUPS_VISIBILITY_OWN:
+            return array_intersect_key($members, [$USER->id => true]);
+        default:
+            return [];
+    }
+}
+
+/**
  * Returns DB records of groups used by the choicegroup activity
  *
  * @param object $choicegroup
@@ -859,16 +1271,18 @@ function choicegroup_get_option_text($choicegroup, $id) {
 function choicegroup_get_groups($choicegroup) {
     global $DB;
 
-    static $groups = [];
-
-    if (count($groups)) {
-        return $groups;
+    if (is_numeric($choicegroup)) {
+        $choicegroupid = (int)$choicegroup;
+    } else {
+        $choicegroupid = (int)$choicegroup->id;
     }
 
-    if (is_numeric($choicegroup)) {
-        $choicegroupid = $choicegroup;
-    } else {
-        $choicegroupid = $choicegroup->id;
+    // Keyed by instance: a static shared by every instance returned the first instance's groups for the next one.
+    $cache = choicegroup_get_request_cache();
+    $cachekey = 'groups_' . $choicegroupid;
+    $groups = $cache->get($cachekey);
+    if ($groups !== false) {
+        return $groups;
     }
 
     $groups = [];
@@ -878,6 +1292,8 @@ function choicegroup_get_groups($choicegroup) {
             $groups[$group->id] = $group;
         }
     }
+
+    $cache->set($cachekey, $groups);
 
     return $groups;
 }
@@ -973,30 +1389,8 @@ function choicegroup_get_post_actions() {
 
 
 /**
- * Implementation of the function for printing the form elements that control
- * whether the course reset functionality affects the choicegroup.
- *
- * @param object $mform form passed by reference
- */
-function choicegroup_reset_course_form_definition(&$mform) {
-    $mform->addElement('header', 'choicegroupheader', get_string('modulenameplural', 'choicegroup'));
-    $mform->addElement('advcheckbox', 'reset_choicegroup', get_string('removeresponses', 'choicegroup'));
-}
-
-/**
- * Course reset form defaults.
- *
- * @param object $course
- * @return array
- */
-function choicegroup_reset_course_form_defaults($course) {
-    return ['reset_choicegroup' => 1];
-}
-
-/**
  * Get all responses for a choicegroup
  *
- * @uses CONTEXT_MODULE
  * @param object $choicegroup
  * @param object $cm
  * @param int $groupmode Group mode
@@ -1004,19 +1398,26 @@ function choicegroup_reset_course_form_defaults($course) {
  * @return array
  */
 function choicegroup_get_response_data($choicegroup, $cm, $groupmode, $onlyactive) {
-    // Initialise the returned array, which is a matrix:  $allresponses[responseid][userid] = responseobject.
-    static $allresponses = [];
-
-    if (count($allresponses)) {
-        return $allresponses;
-    }
-
     // Get the current group.
     if ($groupmode > 0) {
         $currentgroup = groups_get_activity_group($cm);
     } else {
         $currentgroup = 0;
     }
+
+    // Keyed by instance and by what shapes the result: a static shared by every instance returned the first
+    // instance's responses for the next one in the same request.
+    $cache = choicegroup_get_request_cache();
+    $cachekey = 'responses_' . (int)$choicegroup->id . '_' . (int)$groupmode . '_' . (int)$currentgroup . '_' .
+        (empty($onlyactive) ? 0 : 1);
+    $allresponses = $cache->get($cachekey);
+    if ($allresponses !== false) {
+        return $allresponses;
+    }
+
+    // Initialise the returned array, a matrix: $allresponses[groupid][userid] = user object.
+    // Group 0 holds the unanswered users.
+    $allresponses = [];
 
     // First get all the users who have access here.
     // To start with we assume they are all "unanswered" then move them later.
@@ -1040,6 +1441,8 @@ function choicegroup_get_response_data($choicegroup, $cm, $groupmode, $onlyactiv
             unset($allresponses[0][$response->userid]);
         }
     }
+
+    $cache->set($cachekey, $allresponses);
 
     return $allresponses;
 }
@@ -1088,12 +1491,6 @@ function choicegroup_get_extra_capabilities() {
 /**
  * List of features supported in choicegroup module
  *
- * @uses FEATURE_GROUPS
- * @uses FEATURE_GROUPINGS
- * @uses FEATURE_MOD_INTRO
- * @uses FEATURE_COMPLETION_TRACKS_VIEWS
- * @uses FEATURE_GRADE_HAS_GRADE
- * @uses FEATURE_GRADE_OUTCOMES
  * @param string $feature FEATURE_xx constant for requested feature
  * @return mixed True if module supports feature, null if doesn't know
  */
@@ -1146,7 +1543,6 @@ function choicegroup_extend_settings_navigation(settings_navigation $settings, n
             return false;
         }
 
-        // Big function, approx 6 SQL calls per user.
         $allresponses = choicegroup_get_response_data($choicegroup, $cm, $groupmode, $choicegroup->onlyactive);
 
         $responsecount = 0;
@@ -1175,9 +1571,11 @@ function choicegroup_extend_settings_navigation(settings_navigation $settings, n
 
 /**
  * Return a list of page types
+ *
  * @param string $pagetype current page type
  * @param stdClass $parentcontext Block's parent context
  * @param stdClass $currentcontext Current context of block
+ * @return array Page type patterns mapped to their names
  */
 function choicegroup_page_type_list($pagetype, $parentcontext, $currentcontext) {
     $modulepagetype = ['mod-choicegroup-*' => get_string('page-mod-choicegroup-x', 'choicegroup')];
@@ -1212,7 +1610,11 @@ function mod_choicegroup_core_calendar_provide_event_action(
     calendar_event $event,
     \core_calendar\action_factory $factory
 ) {
-    $cm = get_fast_modinfo($event->courseid)->instances['choicegroup'][$event->instance];
+    // The event can outlive its activity (deleted, or in a course being deleted): there is no action then.
+    $cm = get_fast_modinfo($event->courseid)->instances['choicegroup'][$event->instance] ?? null;
+    if (!$cm) {
+        return null;
+    }
 
     $completion = new \completion_info($cm->get_course());
 
@@ -1237,15 +1639,22 @@ function mod_choicegroup_core_calendar_provide_event_action(
  * @param  stdClass $course          course object
  * @param  stdClass $cm              course module object
  * @param  stdClass $context         context object
- * @since Moodle 3.0
  */
 function choicegroup_view($choicegroup, $course, $cm, $context) {
-    // phpcs:disable moodle.Commenting.TodoComment
-    // TODO: Trigger course_module_viewed event.
+    global $CFG;
+    require_once($CFG->libdir . '/completionlib.php');
+
+    // Trigger course_module_viewed event.
     $params = [
         'context' => $context,
         'objectid' => $choicegroup->id,
     ];
+
+    $event = \mod_choicegroup\event\course_module_viewed::create($params);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('course', $course);
+    $event->add_record_snapshot('choicegroup', choicegroup_get_snapshot_record($choicegroup));
+    $event->trigger();
 
     // Completion.
     $completion = new completion_info($course);
@@ -1253,15 +1662,12 @@ function choicegroup_view($choicegroup, $course, $cm, $context) {
 }
 
 /**
- * Add a get_coursemodule_info function in case any choicegroup type wants to add 'extra' information
- * for the course (see resource).
- *
- * Given a course_module object, this function returns any "extra" information that may be needed
- * when printing this activity in a course listing.  See get_array_of_activities() in course/lib.php.
+ * Given a course_module object, return the "extra" information needed when printing this activity in a course
+ * listing: its name, description, the custom completion rule and the opening and closing dates.
+ * See get_array_of_activities() in course/lib.php.
  *
  * @param stdClass $coursemodule The coursemodule object (record).
- * @return cached_cm_info An object on information that the courses
- *                        will know about (most noticeably, an icon).
+ * @return cached_cm_info|false The information the course page needs, or false when the instance does not exist.
  */
 function choicegroup_get_coursemodule_info($coursemodule) {
     global $DB;

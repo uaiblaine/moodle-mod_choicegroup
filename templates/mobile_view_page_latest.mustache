@@ -15,7 +15,7 @@
     along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 }}
 {{!
-    @template mod_choicegroup/mobile_view_page
+    @template mod_choicegroup/mobile_view_page_latest
 
     Template for the mobile view page.
 
@@ -206,6 +206,6 @@
         </form>
 
         <!-- Call log WS when the template is loaded. -->
-        <span core-site-plugins-call-ws-on-load name="mod_choicegroup_view_choicegroup" [params]="{choicegroupid: <% choicegroup.id %>}" [preSets]="{getFromCache: 0, saveToCache: 0}"></span>
+        <ion-text core-site-plugins-call-ws-on-load name="mod_choicegroup_view_choicegroup" [params]="{choicegroupid: <% choicegroup.id %>}" [preSets]="{getFromCache: 0, saveToCache: 0}"></ion-text>
     <%/ choicegroup.open %>
 </core-loading>

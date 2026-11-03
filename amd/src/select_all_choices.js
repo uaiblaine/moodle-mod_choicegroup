@@ -23,7 +23,7 @@
 
 define(['jquery'], function($) {
     return {
-        init: function () {
+        init: function() {
             $('.selectallnone a').on('click', function(e) {
                 e.preventDefault();
                 $('#attemptsform').find('input:checkbox').prop('checked', $(this).data('selectInfo'));

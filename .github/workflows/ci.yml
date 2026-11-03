@@ -1,0 +1,41 @@
+name: ci
+
+# workflow_dispatch is the manual escape hatch: it lets a run be launched for
+# a push whose commits would otherwise skip CI, without pushing another commit.
+#
+# This replaced upstream's self-contained moodle-plugin-ci workflow with the
+# moodle-an-hochschulen reusable one the fleet uses; keep this file when merging
+# upstream/master.
+on:
+  push:
+    # Filtered to the merge targets. Without this, a push to a feature branch
+    # ran the whole pipeline AND the pull_request event ran it again on the same
+    # commit - double, for no extra information.
+    branches:
+      - 'MOODLE_*_STABLE'
+  pull_request:
+  workflow_dispatch:
+
+# Supersede a run when new commits arrive on the same pull request: pushing
+# three fixes in a row otherwise leaves three full pipelines running to the end.
+# Never on a MOODLE_*_STABLE branch - each merge there is the only run its commit
+# will ever get, and a second merge landing quickly must not cancel the first one's verdict.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/heads/MOODLE_') }}
+
+jobs:
+  # One reusable-workflow call per supported Moodle branch (version.php $plugin->supported). This fork
+  # supports Moodle 5.3 only, so one job runs the full PHP x DB matrix. PHPUnit and Behat run on every
+  # runtime leg.
+  #
+  # The job calls uaiblaine/moodle-workflows (MAH plus the fork's additions). runner: the repository
+  # variable CI_RUNNER (set by `mdl runner add`) sends every job to the LAN CI hosts' self-hosted
+  # runners; unset, the jobs run on GitHub's ubuntu-24.04. A pull request from a fork always stays on
+  # ubuntu-24.04: the hosts refuse code from forks.
+  ci-503:
+    name: Moodle 5.03
+    uses: uaiblaine/moodle-workflows/.github/workflows/moodle-plugin-ci.yml@main
+    with:
+      moodle-core-branch: MOODLE_503_STABLE
+      runner: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_RUNNER || '' }}

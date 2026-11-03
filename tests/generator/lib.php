@@ -26,6 +26,9 @@ class mod_choicegroup_generator extends testing_module_generator {
     /**
      * Create a new instance of the Group choice activity.
      *
+     * The options come from `groups` (an array of group ids, serialised as the settings form does) or from
+     * `serializedselectedgroups` itself; a limit per group goes in `group_<id>_limit`, as the form posts it.
+     *
      * @param array|stdClass|null $record
      * @param array|null $options
      * @return stdClass
@@ -33,7 +36,12 @@ class mod_choicegroup_generator extends testing_module_generator {
     public function create_instance($record = null, ?array $options = null) {
         $record = (object)(array)$record;
 
-        $record->serializedselectedgroups = implode(';', []);
+        if (isset($record->groups)) {
+            $record->serializedselectedgroups = implode(';', (array)$record->groups);
+            unset($record->groups);
+        } else if (!isset($record->serializedselectedgroups)) {
+            $record->serializedselectedgroups = implode(';', []);
+        }
 
         return parent::create_instance($record, $options);
     }

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version information
+ * Important dates for mod_choicegroup
  *
  * @package    mod_choicegroup
  * @copyright  2021 Université de Lausanne
@@ -35,7 +35,6 @@ use core\activity_dates;
 class dates extends activity_dates {
     /**
      * Returns a list of important dates in mod_choicegroup
-     * (code copied from /mod/assign/classes/dates.php)
      *
      * @return array
      */
