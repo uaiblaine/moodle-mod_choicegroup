@@ -109,6 +109,21 @@ fork site.
 - Request-level caches must be keyed by instance (and user): completion, the course overview and
   WS batches evaluate several instances in one request.
 
+## Known gaps (next pull request)
+
+Left out of the fleet-standard pull request on purpose, to keep upstream syncs cheap; the owner
+wants them done in a follow-up pull request of their own:
+
+- `html_writer` output (renderer.php, report.php, index.php, lib.php, view.php, the group picker
+  in mod_form.php) moved to Mustache templates; the fleet rule is zero `html_writer`.
+- The jQuery AMD modules (`choicegroupdatadisplay`, `select_all_choices`) rewritten as ES modules.
+- The members and descriptions show/hide toggles made accessible: `<button>` with
+  `aria-expanded`/`aria-controls` instead of `<a role="button" href="#">`.
+- The literal colours in styles.css replaced with theme tokens through a fallback chain
+  (`var(--bs-border-color, var(--border-color, #dee2e6))`), which also fixes dark mode.
+- The member-limit lock is released before the multi-mode transaction commits, so a limited group
+  can overfill by one under concurrent requests.
+
 ## Testing notes
 
 - PHPUnit covers the choice rules, web services, backup/restore, events and the privacy
