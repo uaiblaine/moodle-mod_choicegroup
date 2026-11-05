@@ -454,6 +454,26 @@ function check_restrictions($choicegroup, $userid) {
 
 
 /**
+ * Whether the member counts of an instance's groups may be shown to a user, as the instance's showresults has it.
+ *
+ * "After close" means past the closing date: before the opening date the activity is not closed. A holder of
+ * mod/choicegroup:readresponses reads every response in the report anyway; callers that show counts to such a user
+ * test that capability themselves. {@see \mod_choicegroup\local\selection} and the web services read this rule.
+ *
+ * @param object $choicegroup The instance record
+ * @param bool $answered Whether the user holds a choice in this instance
+ * @return bool
+ */
+function choicegroup_results_visible($choicegroup, bool $answered): bool {
+    $showresults = (int)$choicegroup->showresults;
+    $closed = !empty($choicegroup->timeclose) && time() > $choicegroup->timeclose;
+
+    return $showresults === (int)CHOICEGROUP_SHOWRESULTS_ALWAYS ||
+        ($showresults === (int)CHOICEGROUP_SHOWRESULTS_AFTER_ANSWER && $answered) ||
+        ($showresults === (int)CHOICEGROUP_SHOWRESULTS_AFTER_CLOSE && $closed);
+}
+
+/**
  * Check if the choicegroup is open or closed.
  *
  * @param object $choicegroup
@@ -530,51 +550,54 @@ function choicegroup_save_user_choices($choicegroup, $userid, $course, $cm, arra
     $userid = (int)$userid;
     $context = context_module::instance($cm->id);
 
-    choicegroup_check_user_can_change($choicegroup, $userid, $context);
+    // One save of a user's choice at a time: two saves that both read the choice before either wrote would each pass
+    // the rules (allowupdate, the maximum) and each keep its own groups, leaving the user in a set nobody chose.
+    // A removal takes no lock: racing a save it can only leave the user with fewer groups, never break a rule.
+    $userlock = choicegroup_lock_user_choice($choicegroup, $userid);
+    $locks = [];
 
-    $optiongroupids = choicegroup_get_option_groupids($choicegroup);
-    $optionids = array_values(array_unique(array_map('intval', $optionids)));
-    foreach ($optionids as $optionid) {
-        if (!isset($optiongroupids[$optionid])) {
-            throw new moodle_exception('invalidoption', 'choicegroup');
-        }
-    }
-
-    if (empty($choicegroup->multipleenrollmentspossible)) {
-        if (count($optionids) !== 1) {
-            throw new moodle_exception('mustchooseone', 'choicegroup');
-        }
-
-        choicegroup_user_submit_response(reset($optionids), $choicegroup, $userid, $course, $cm);
-        return;
-    }
-
-    $count = count($optionids);
-    if (!empty($choicegroup->maxenrollments) && $count > $choicegroup->maxenrollments) {
-        throw new moodle_exception('mustchoosemax', 'choicegroup', '', $choicegroup->maxenrollments);
-    }
-
-    if (!empty($choicegroup->minenrollments) && $count < $choicegroup->minenrollments) {
-        throw new moodle_exception('mustchoosemin', 'choicegroup', '', $choicegroup->minenrollments);
-    }
-
-    // The limited groups the set joins are locked before the transaction and released after its commit: another
-    // request counting a group's members cannot see this one's additions until the commit, so a lock released
-    // earlier would let both see room for one more and overfill the group.
-    // Every limited group the set names is locked, joined or not yet: a membership read before the lock could change
-    // before the add, and a group left unlocked would then be joined under no lock.
-    $tojoin = [];
-    if ($choicegroup->limitanswers) {
-        foreach ($optionids as $optionid) {
-            $tojoin[] = $optiongroupids[$optionid];
-        }
-    }
-    $locks = choicegroup_lock_groups($tojoin);
-
-    // One transaction for the whole set: a later option that hits a full group throws after earlier additions and
-    // removals were written, and the user would be left in a state nobody chose. Core buffers the events until the
-    // commit and drops them on a rollback.
     try {
+        choicegroup_check_user_can_change($choicegroup, $userid, $context);
+
+        $optiongroupids = choicegroup_get_option_groupids($choicegroup);
+        $optionids = array_values(array_unique(array_map('intval', $optionids)));
+        foreach ($optionids as $optionid) {
+            if (!isset($optiongroupids[$optionid])) {
+                throw new moodle_exception('invalidoption', 'choicegroup');
+            }
+        }
+
+        $count = count($optionids);
+        if (empty($choicegroup->multipleenrollmentspossible)) {
+            if ($count !== 1) {
+                throw new moodle_exception('mustchooseone', 'choicegroup');
+            }
+        } else {
+            if (!empty($choicegroup->maxenrollments) && $count > $choicegroup->maxenrollments) {
+                throw new moodle_exception('mustchoosemax', 'choicegroup', '', $choicegroup->maxenrollments);
+            }
+
+            if (!empty($choicegroup->minenrollments) && $count < $choicegroup->minenrollments) {
+                throw new moodle_exception('mustchoosemin', 'choicegroup', '', $choicegroup->minenrollments);
+            }
+        }
+
+        // The limited groups the set joins are locked before the transaction and released after its commit: another
+        // request counting a group's members cannot see this one's additions until the commit, so a lock released
+        // earlier would let both see room for one more and overfill the group.
+        // Every limited group the set names is locked, joined or not yet: a membership read before the lock could
+        // change before the add, and a group left unlocked would then be joined under no lock.
+        $tojoin = [];
+        if ($choicegroup->limitanswers) {
+            foreach ($optionids as $optionid) {
+                $tojoin[] = $optiongroupids[$optionid];
+            }
+        }
+        $locks = choicegroup_lock_groups($tojoin);
+
+        // One transaction for the whole change, a single choice being a set of one: a group that refuses the user
+        // after earlier additions and removals were written would otherwise leave the user in a state nobody chose
+        // (no group, or two in single mode). Core buffers the events until the commit and drops them on a rollback.
         $transaction = $DB->start_delegated_transaction();
         try {
             foreach ($optiongroupids as $optionid => $groupid) {
@@ -593,9 +616,31 @@ function choicegroup_save_user_choices($choicegroup, $userid, $course, $cm, arra
             $transaction->rollback($e);
         }
     } finally {
-        // After the commit or the rollback, and also when the transaction could not start.
+        // After the commit or the rollback, and also when a rule refused the change or the transaction could not start.
         choicegroup_release_locks($locks);
+        $userlock->release();
     }
+}
+
+/**
+ * Take the lock under which a user's choice in one instance changes.
+ *
+ * {@see choicegroup_save_user_choices()} takes it before it reads the user's current choice and holds it until its
+ * commit; it is always taken before any group lock, so no two requests wait on each other.
+ *
+ * @param object $choicegroup The instance record
+ * @param int $userid The user whose choice changes
+ * @return \core\lock\lock The lock
+ * @throws moodle_exception When the lock is not granted in time
+ */
+function choicegroup_lock_user_choice($choicegroup, $userid) {
+    $factory = \core\lock\lock_config::get_lock_factory('mod_choicegroup');
+    $lock = $factory->get_lock('choice_' . (int)$choicegroup->id . '_' . (int)$userid, 5);
+    if (!$lock) {
+        throw new moodle_exception('locktimeout');
+    }
+
+    return $lock;
 }
 
 /**
@@ -927,13 +972,21 @@ function choicegroup_get_export_data($choicegroup, $course, $context, $users) {
 /**
  * Make a value safe for one cell of the tab-separated download.
  *
- * A tab or a line break inside a name would shift every following column or start a forged row.
+ * A tab or a line break inside a name would shift every following column or start a forged row, and a cell that
+ * starts with a formula character (=, +, -, @) runs as a formula when a spreadsheet opens the file: such a cell is
+ * prefixed with an apostrophe, which spreadsheets read as "text" and do not show. The ODS and Excel downloads write
+ * string cells and need neither.
  *
  * @param string $value The cell value
- * @return string The value with tabs and line breaks replaced by spaces
+ * @return string The value with tabs and line breaks replaced by spaces, and a leading formula character escaped
  */
 function choicegroup_clean_txt_cell($value) {
-    return str_replace(["\r\n", "\r", "\n", "\t"], ' ', (string)$value);
+    $value = str_replace(["\r\n", "\r", "\n", "\t"], ' ', (string)$value);
+    if ($value !== '' && in_array($value[0], ['=', '+', '-', '@'], true)) {
+        $value = "'" . $value;
+    }
+
+    return $value;
 }
 
 /**

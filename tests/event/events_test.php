@@ -80,11 +80,17 @@ final class events_test extends \advanced_testcase {
         $events = $this->choice_events($sink);
         $sink->clear();
 
+        // A switch leaves and joins in option order, inside one transaction: the order of the two is not the contract.
         $this->assertCount(3, $events);
-        [$joined1, $joined2, $left1] = $events;
+        $joined1 = $events[0];
         $this->assertInstanceOf(choice_updated::class, $joined1);
-        $this->assertInstanceOf(choice_updated::class, $joined2);
-        $this->assertInstanceOf(choice_removed::class, $left1);
+        $switch = [];
+        foreach (array_slice($events, 1) as $event) {
+            $switch[get_class($event)] = $event;
+        }
+        $this->assertCount(2, $switch);
+        $joined2 = $switch[choice_updated::class];
+        $left1 = $switch[choice_removed::class];
         $this->assertSame('choicegroup', $joined1->objecttable);
         $this->assertEquals($module->id, $joined1->objectid);
         $this->assertEquals($student->id, $joined1->relateduserid);

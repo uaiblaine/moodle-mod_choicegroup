@@ -283,4 +283,114 @@ final class external_test extends \advanced_testcase {
         $this->assertFalse($response['error']);
         $this->assertCount(1, $events);
     }
+
+    /**
+     * The member counts follow showresults for the user the options are built for; a full group is still full.
+     *
+     * @return void
+     */
+    public function test_counts_follow_showresults(): void {
+        $this->resetAfterTest();
+        $a = $this->create_setup([
+            'showresults' => CHOICEGROUP_SHOWRESULTS_NOT,
+            'limitanswers' => 1,
+        ]);
+        groups_add_member($a->g1->id, $a->s2->id);
+        $this->set_limit($a, $a->g1->id, 1);
+        $this->set_limit($a, $a->g2->id, 5);
+        $args = ['choicegroupid' => $a->module->id, 'userid' => $a->s1->id];
+
+        $this->setUser($a->s1);
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertArrayNotHasKey('countanswers', $options[$a->g1->id]);
+        $this->assertArrayNotHasKey('countanswers', $options[$a->g2->id]);
+        // The count is hidden, not the limit: the full group is still refused and named full.
+        $this->assertTrue($options[$a->g1->id]['disabled']);
+        $this->assertFalse($options[$a->g2->id]['disabled']);
+
+        // A reader of the responses sees the counts whatever showresults says.
+        $this->setUser($a->teacher);
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertSame(1, $options[$a->g1->id]['countanswers']);
+
+        // Control: with the results always shown the same student sees the counts.
+        $this->set_showresults($a, CHOICEGROUP_SHOWRESULTS_ALWAYS);
+        $this->setUser($a->s1);
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertSame(1, $options[$a->g1->id]['countanswers']);
+        $this->assertSame(0, $options[$a->g2->id]['countanswers']);
+    }
+
+    /**
+     * "After answer" shows the counts once the user has chosen, "after close" once the closing date has passed.
+     *
+     * @return void
+     */
+    public function test_counts_wait_for_the_answer_or_the_closing_date(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $a = $this->create_setup(['showresults' => CHOICEGROUP_SHOWRESULTS_AFTER_ANSWER]);
+        groups_add_member($a->g1->id, $a->s2->id);
+        $args = ['choicegroupid' => $a->module->id, 'userid' => $a->s1->id];
+        $this->setUser($a->s1);
+
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertArrayNotHasKey('countanswers', $options[$a->g1->id]);
+        groups_add_member($a->g2->id, $a->s1->id);
+        choicegroup_purge_request_cache();
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertSame(1, $options[$a->g1->id]['countanswers']);
+
+        $this->set_showresults($a, CHOICEGROUP_SHOWRESULTS_AFTER_CLOSE);
+        $DB->update_record('choicegroup', (object)[
+            'id' => $a->module->id,
+            'timeopen' => time() - 2 * DAYSECS,
+            'timeclose' => time() + DAYSECS,
+        ]);
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertArrayNotHasKey('countanswers', $options[$a->g1->id]);
+        $DB->set_field('choicegroup', 'timeclose', time() - DAYSECS, ['id' => $a->module->id]);
+        $options = $this->options_by_group($this->call('get_choicegroup_options', $args));
+        $this->assertSame(1, $options[$a->g1->id]['countanswers']);
+    }
+
+    /**
+     * The options of a response, keyed by group id; the call must have succeeded.
+     *
+     * @param array $response The response of call()
+     * @return array The options by group id
+     */
+    private function options_by_group(array $response): array {
+        $this->assertFalse($response['error'], $response['exception']->message ?? '');
+
+        return array_column($response['data']['options'], null, 'groupid');
+    }
+
+    /**
+     * Set the member limit of one option.
+     *
+     * @param \stdClass $setup The setup
+     * @param int $groupid The option's group
+     * @param int $limit The limit
+     * @return void
+     */
+    private function set_limit(\stdClass $setup, int $groupid, int $limit): void {
+        global $DB;
+
+        $DB->set_field('choicegroup_options', 'maxanswers', $limit, ['id' => $setup->option[$groupid]]);
+    }
+
+    /**
+     * Change the showresults setting of the instance.
+     *
+     * @param \stdClass $setup The setup
+     * @param string $showresults One of the CHOICEGROUP_SHOWRESULTS_ constants
+     * @return void
+     */
+    private function set_showresults(\stdClass $setup, string $showresults): void {
+        global $DB;
+
+        $DB->set_field('choicegroup', 'showresults', $showresults, ['id' => $setup->module->id]);
+    }
 }

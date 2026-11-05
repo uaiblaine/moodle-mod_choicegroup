@@ -1,0 +1,1 @@
+s/(\$lock = \$factory->get_lock\(\x27choice_\x27[^\n]*\n[ ]+if \(!\$lock\) \{\n[ ]+)throw new moodle_exception\(\x27locktimeout\x27\);/$1return new \\core\\lock\\lock(\x27none\x27, \$factory);/ or die "s50 did not match";

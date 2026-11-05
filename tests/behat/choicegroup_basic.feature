@@ -58,3 +58,11 @@ Feature: Use the choicegroup activity with groups within groupings
     # Student view.
     When I am on the "Choose your group" "choicegroup activity" page logged in as student1
     Then I should see "A"
+
+  @javascript
+  Scenario: An opening date ahead keeps the activity shut even without a closing date
+    Given the following "activities" exist:
+      | activity    | name             | course | idnumber     | timerestrict | timeopen      | timeclose |
+      | choicegroup | Opens tomorrow   | C1     | choicegroup2 | 1            | ##tomorrow##  | 0         |
+    When I am on the "Opens tomorrow" "choicegroup activity" page logged in as student1
+    Then I should see "Sorry, this activity is not available until"

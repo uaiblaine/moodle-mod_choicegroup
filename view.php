@@ -288,15 +288,14 @@ if (isloggedin() && ($current !== false)) {
 // Print the form.
 $choicegroupopen = true;
 $timenow = time();
-if ($choicegroup->timeclose != 0) {
-    if ($choicegroup->timeopen > $timenow) {
-        echo $OUTPUT->box(get_string("notopenyet", "choicegroup", userdate($choicegroup->timeopen)), "generalbox notopenyet");
-        echo $OUTPUT->footer();
-        exit;
-    } else if ($timenow > $choicegroup->timeclose) {
-        echo $OUTPUT->box(get_string("expired", "choicegroup", userdate($choicegroup->timeclose)), "generalbox expired");
-        $choicegroupopen = false;
-    }
+// Each date on its own, as check_date_restrictions() reads them when the choice is saved.
+if (!empty($choicegroup->timeopen) && $choicegroup->timeopen > $timenow) {
+    echo $OUTPUT->box(get_string("notopenyet", "choicegroup", userdate($choicegroup->timeopen)), "generalbox notopenyet");
+    echo $OUTPUT->footer();
+    exit;
+} else if (!empty($choicegroup->timeclose) && $timenow > $choicegroup->timeclose) {
+    echo $OUTPUT->box(get_string("expired", "choicegroup", userdate($choicegroup->timeclose)), "generalbox expired");
+    $choicegroupopen = false;
 }
 
 $options = choicegroup_prepare_options($choicegroup, $USER, $cm, $allresponses);

@@ -119,13 +119,16 @@ class mobile {
         } catch (Exception $e) {
             $options = [];
         }
+        // The count column shows when the options carry the counts: the web service decides who may see them
+        // ({@see mod_choicegroup_external::get_choicegroup_options()}), and the column follows its answer.
+        $choicegroup->countsvisible = !empty($options) && array_key_exists('countanswers', $options[0]);
 
         // Format name and intro.
         $choicegroup->name = format_string($choicegroup->name);
-        [$choicegroup->intro, $choicegroup->introformat] = external_format_text(
+        [$choicegroup->intro, $choicegroup->introformat] = \core_external\util::format_text(
             $choicegroup->intro,
             $choicegroup->introformat,
-            $context->id,
+            $context,
             'mod_choicegroup',
             'intro'
         );
