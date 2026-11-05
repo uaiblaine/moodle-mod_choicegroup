@@ -55,6 +55,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversFunction('choicegroup_filter_visible_members')]
 #[CoversFunction('choicegroup_get_export_data')]
 #[CoversFunction('choicegroup_clean_txt_cell')]
+#[CoversFunction('choicegroup_lock_user_choice')]
 #[CoversFunction('mod_choicegroup_core_calendar_provide_event_action')]
 #[CoversFunction('choicegroup_view')]
 final class lib_test extends \advanced_testcase {
@@ -612,7 +613,7 @@ final class lib_test extends \advanced_testcase {
         // Control: both groups were locked, each once.
         $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
         sort($keys);
-        $expected = ['group_' . $a->g1->id, 'group_' . $a->g2->id];
+        $expected = ['choice_' . $a->choicegroup->id . '_' . $a->s1->id, 'group_' . $a->g1->id, 'group_' . $a->g2->id];
         sort($expected);
         $this->assertSame($expected, $keys);
         foreach (\mod_choicegroup_recording_lock_factory::$releases as $release) {
@@ -662,7 +663,7 @@ final class lib_test extends \advanced_testcase {
         $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
         $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
         sort($keys);
-        $expected = ['group_' . $a->g1->id, 'group_' . $a->g2->id];
+        $expected = ['choice_' . $a->choicegroup->id . '_' . $a->s1->id, 'group_' . $a->g1->id, 'group_' . $a->g2->id];
         sort($expected);
         $this->assertSame($expected, $keys);
         foreach (\mod_choicegroup_recording_lock_factory::$releases as $release) {
@@ -710,7 +711,7 @@ final class lib_test extends \advanced_testcase {
         $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
         $this->assertFalse(groups_is_member($a->g2->id, $a->s1->id));
         $keys = array_column(\mod_choicegroup_recording_lock_factory::$releases, 'key');
-        $this->assertSame(['group_' . $ids[0]], $keys);
+        $this->assertSame(['group_' . $ids[0], 'choice_' . $a->choicegroup->id . '_' . $a->s1->id], $keys);
     }
 
     /**
@@ -947,6 +948,22 @@ final class lib_test extends \advanced_testcase {
     public function test_a_text_cell_keeps_no_tab_or_line_break(): void {
         $this->assertSame('a b c d e', choicegroup_clean_txt_cell("a\tb\nc\r\nd\re"));
         $this->assertSame('plain', choicegroup_clean_txt_cell('plain'));
+        $this->assertSame('', choicegroup_clean_txt_cell(''));
+    }
+
+    /**
+     * A text cell that a spreadsheet would read as a formula starts with an apostrophe instead.
+     *
+     * @return void
+     */
+    public function test_a_text_cell_never_starts_a_formula(): void {
+        foreach (['=1+1', '+5', '-2+3', '@SUM(A1)'] as $value) {
+            $this->assertSame("'" . $value, choicegroup_clean_txt_cell($value), $value);
+        }
+        // A line break before the formula is a space once cleaned, which a spreadsheet does not evaluate.
+        $this->assertSame(' =1', choicegroup_clean_txt_cell("\n=1"));
+        // Control: a formula character further in is left alone.
+        $this->assertSame('a=b', choicegroup_clean_txt_cell('a=b'));
     }
 
     /**
@@ -1056,5 +1073,75 @@ final class lib_test extends \advanced_testcase {
         include($file);
 
         return $capabilities;
+    }
+
+    /**
+     * A change of a user's choice waits for that user's lock, so two requests cannot each keep their own groups.
+     *
+     * @return void
+     */
+    public function test_a_change_is_saved_under_the_users_lock(): void {
+        global $CFG;
+
+        $this->resetAfterTest();
+        $a = $this->create_setup();
+        $this->setUser($a->s1);
+
+        $CFG->lock_factory = '\mod_choicegroup_recording_lock_factory';
+        \mod_choicegroup_recording_lock_factory::$releases = [];
+        \mod_choicegroup_recording_lock_factory::$refuse = ['choice_' . $a->choicegroup->id . '_' . $a->s1->id];
+        try {
+            choicegroup_save_user_choices($a->choicegroup, $a->s1->id, $a->course, $a->cm, [$a->option[$a->g1->id]]);
+            $this->fail('The choice was saved without the lock of its user.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('locktimeout', $e->errorcode);
+        } finally {
+            unset($CFG->lock_factory);
+            \mod_choicegroup_recording_lock_factory::$refuse = [];
+        }
+        $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
+
+        // Control: with the site's lock factory the same call saves.
+        choicegroup_save_user_choices($a->choicegroup, $a->s1->id, $a->course, $a->cm, [$a->option[$a->g1->id]]);
+        $this->assertTrue(groups_is_member($a->g1->id, $a->s1->id));
+    }
+
+    /**
+     * A single choice that cannot join its new group leaves the user in the group they held, never in none.
+     *
+     * The previous group is left before the new one is joined when its option comes first, so the change runs in one
+     * transaction like a set.
+     *
+     * @return void
+     */
+    public function test_a_failed_single_change_keeps_the_previous_group(): void {
+        $this->resetAfterTest();
+        // PHPUnit wraps a test in a transaction, and a rollback inside a nested one undoes nothing until the outer ends.
+        $this->preventResetByRollback();
+        $a = $this->create_setup(['limitanswers' => 1]);
+        $this->set_limit($a, $a->g1->id, 5);
+        $this->set_limit($a, $a->g2->id, 1);
+        $a = $this->load_setup($a);
+        // The option of g1 is read before the option of g2.
+        $this->assertLessThan($a->option[$a->g2->id], $a->option[$a->g1->id]);
+        groups_add_member($a->g2->id, $a->s2->id);
+        $this->setUser($a->s1);
+        choicegroup_save_user_choices($a->choicegroup, $a->s1->id, $a->course, $a->cm, [$a->option[$a->g1->id]]);
+
+        try {
+            choicegroup_save_user_choices($a->choicegroup, $a->s1->id, $a->course, $a->cm, [$a->option[$a->g2->id]]);
+            $this->fail('A full group took one more member.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('choicegroupfull', $e->errorcode);
+        }
+        $this->assertTrue(groups_is_member($a->g1->id, $a->s1->id));
+        $this->assertFalse(groups_is_member($a->g2->id, $a->s1->id));
+
+        // Control: a change to a group with room moves the user.
+        $this->set_limit($a, $a->g2->id, 5);
+        $a = $this->load_setup($a);
+        choicegroup_save_user_choices($a->choicegroup, $a->s1->id, $a->course, $a->cm, [$a->option[$a->g2->id]]);
+        $this->assertFalse(groups_is_member($a->g1->id, $a->s1->id));
+        $this->assertTrue(groups_is_member($a->g2->id, $a->s1->id));
     }
 }

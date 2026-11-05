@@ -357,14 +357,15 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
      * @throws moodle_exception
      */
     public function display_publish_name_vertical($choicegroups) {
-        global $context;
-
-        if (!has_capability('mod/choicegroup:downloadresponses', $context)) {
-            return; // Only users who can download the responses see the results.
-        }
-
         if (!$choicegroups) {
             return; // No answers yet, so don't bother.
+        }
+
+        // The instance's own context: a global $context is whatever page set it last, and reading the responses is what
+        // the report asks of its viewer, downloading them a separate right.
+        $context = context_module::instance($choicegroups->coursemoduleid);
+        if (!has_capability('mod/choicegroup:readresponses', $context)) {
+            return; // Only users who can read the responses see the results.
         }
 
         ksort($choicegroups->options);
@@ -446,10 +447,11 @@ class mod_choicegroup_renderer extends plugin_renderer_base {
      * @return string|void The HTML, or nothing when the viewer may not see the results
      */
     public function display_publish_anonymous_horizontal($choicegroups) {
-        global $context;
-
-        if (!has_capability('mod/choicegroup:downloadresponses', $context)) {
-            return; // Only users who can download the responses see the results.
+        // The instance's own context: a global $context is whatever page set it last, and reading the responses is what
+        // the report asks of its viewer, downloading them a separate right.
+        $context = context_module::instance($choicegroups->coursemoduleid);
+        if (!has_capability('mod/choicegroup:readresponses', $context)) {
+            return; // Only users who can read the responses see the results.
         }
 
         ksort($choicegroups->options);

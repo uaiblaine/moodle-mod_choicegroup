@@ -153,8 +153,6 @@ final class renderer_test extends \advanced_testcase {
         $this->setAdminUser();
         $PAGE->set_url('/mod/choicegroup/report.php', ['id' => $cm->id]);
         $PAGE->set_context($context);
-        // The renderer reads the page's context from the global the report page sets.
-        $GLOBALS['context'] = $context;
 
         $allresponses = choicegroup_get_response_data($choicegroup, $cm, 0, false);
         $results = prepare_choicegroup_show_results($choicegroup, $course, $cm, $allresponses);
@@ -212,5 +210,48 @@ final class renderer_test extends \advanced_testcase {
         // Under PHPUnit no footer prints the AMD calls: read them from the requirements manager.
         $amd = implode("\n", (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires));
         $this->assertStringContainsString('mod_choicegroup/selection', $amd);
+    }
+
+    /**
+     * The results show to a reader of the responses who may not download them, in the instance's own context.
+     *
+     * @return void
+     */
+    public function test_results_follow_readresponses_in_the_instance_context(): void {
+        global $DB, $PAGE;
+
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
+        $student = $generator->create_and_enrol($course, 'student', ['firstname' => 'Listed', 'lastname' => 'Member']);
+        $teacher = $generator->create_and_enrol($course, 'teacher');
+        groups_add_member($group->id, $student->id);
+        $module = $generator->create_module('choicegroup', [
+            'course' => $course->id,
+            'groups' => [$group->id],
+            'publish' => CHOICEGROUP_PUBLISH_NAMES,
+        ]);
+        $choicegroup = choicegroup_get_choicegroup($module->id);
+        $cm = get_coursemodule_from_id('choicegroup', $module->cmid);
+        $context = \context_module::instance($cm->id);
+        $teacherrole = $DB->get_field('role', 'id', ['shortname' => 'teacher']);
+        assign_capability('mod/choicegroup:downloadresponses', CAP_PROHIBIT, $teacherrole, $context->id);
+        $this->setUser($teacher);
+        $PAGE->set_url('/mod/choicegroup/report.php', ['id' => $cm->id]);
+        $PAGE->set_context($context);
+        // A global $context left by another page must not decide.
+        $GLOBALS['context'] = \context_system::instance();
+
+        $allresponses = choicegroup_get_response_data($choicegroup, $cm, 0, false);
+        $results = prepare_choicegroup_show_results($choicegroup, $course, $cm, $allresponses);
+        $renderer = $PAGE->get_renderer('mod_choicegroup');
+        $this->assertStringContainsString('Listed Member', (string)$renderer->display_publish_name_vertical($results));
+        $this->assertStringContainsString('results anonymous', (string)$renderer->display_publish_anonymous_horizontal($results));
+
+        // Control: without readresponses nothing shows.
+        assign_capability('mod/choicegroup:readresponses', CAP_PROHIBIT, $teacherrole, $context->id);
+        $this->assertSame('', (string)$renderer->display_publish_name_vertical($results));
+        $this->assertSame('', (string)$renderer->display_publish_anonymous_horizontal($results));
     }
 }

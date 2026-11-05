@@ -118,6 +118,11 @@ class mod_choicegroup_external extends external_api {
         $answers = choicegroup_get_user_answer($choicegroup, $userid, true);
         $choicegroupgroups = choicegroup_get_groups($choicegroup);
 
+        // The counts follow showresults for the user the options are built for, as on view.php; the caller's own
+        // capability to read the responses shows them too, since the report lists every member anyway.
+        $countsvisible = has_capability('mod/choicegroup:readresponses', $context) ||
+            choicegroup_results_visible($choicegroup, !empty($answers));
+
         foreach ($choicegroup->option as $optionid => $text) {
             if (isset($text)) {
                 $option = [];
@@ -127,10 +132,9 @@ class mod_choicegroup_external extends external_api {
                 $option['maxanswers'] = $choicegroup->maxanswers[$optionid];
                 $option['displaylayout'] = $choicegroup->display;
 
-                if (isset($allresponses[$text])) {
-                    $option['countanswers'] = count($allresponses[$text]);
-                } else {
-                    $option['countanswers'] = 0;
+                $countanswers = isset($allresponses[$text]) ? count($allresponses[$text]) : 0;
+                if ($countsvisible) {
+                    $option['countanswers'] = $countanswers;
                 }
 
                 // Check if the option has been answered previously by the user.
@@ -144,7 +148,8 @@ class mod_choicegroup_external extends external_api {
                 }
 
                 // Check if the option has to be disabled because the limit has been reached.
-                $limitreached = $choicegroup->limitanswers && ($option['countanswers'] >= $option['maxanswers']);
+                // A full group is named full whatever showresults says, as on view.php; only the count is hidden.
+                $limitreached = $choicegroup->limitanswers && ($countanswers >= $option['maxanswers']);
                 $stillnotanswered = $option['checked'] === false;
                 $option['disabled'] = $alloptionsdisabled;
                 if ($limitreached && $stillnotanswered) {
@@ -179,7 +184,11 @@ class mod_choicegroup_external extends external_api {
                             'name' => new external_value(PARAM_RAW, 'Group choice name'),
                             'maxanswers' => new external_value(PARAM_INT, 'Maximum number of accepted answers', VALUE_OPTIONAL),
                             'displaylayout' => new external_value(PARAM_INT, 'Display layout', VALUE_OPTIONAL),
-                            'countanswers' => new external_value(PARAM_INT, 'Current number of answers', VALUE_OPTIONAL),
+                            'countanswers' => new external_value(
+                                PARAM_INT,
+                                'Current number of answers, absent when showresults hides the counts from the user',
+                                VALUE_OPTIONAL
+                            ),
                             'checked' => new external_value(PARAM_BOOL, 'Checked', VALUE_OPTIONAL),
                             'disabled' => new external_value(PARAM_BOOL, 'Disabled', VALUE_OPTIONAL),
                         ]

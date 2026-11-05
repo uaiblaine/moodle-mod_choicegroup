@@ -71,7 +71,8 @@
         },
         "open": true,
         "expired": false,
-        "alloptionsdisabled": false
+        "alloptionsdisabled": false,
+        "countsvisible": true
       },
       "options": [
         {
@@ -139,12 +140,14 @@
                     {{ 'plugin.mod_choicegroup.group' | translate }}
                 </ion-col>
                 <ion-col size="3" class="bold ion-justify-content-center ion-align-items-center ion-text-center">
-                    <%^ choicegroup.limitanswers %>
-                        {{ 'plugin.mod_choicegroup.members/' | translate }}
-                    <%/ choicegroup.limitanswers %>
-                    <%# choicegroup.limitanswers %>
-                        {{ 'plugin.mod_choicegroup.members/max' | translate }}
-                    <%/ choicegroup.limitanswers %>
+                    <%# choicegroup.countsvisible %>
+                        <%^ choicegroup.limitanswers %>
+                            {{ 'plugin.mod_choicegroup.members/' | translate }}
+                        <%/ choicegroup.limitanswers %>
+                        <%# choicegroup.limitanswers %>
+                            {{ 'plugin.mod_choicegroup.members/max' | translate }}
+                        <%/ choicegroup.limitanswers %>
+                    <%/ choicegroup.countsvisible %>
                 </ion-col>
             </ion-row>
 
@@ -174,8 +177,10 @@
                         </ion-col>
 
                         <ion-col size="3" class="ion-justify-content-center ion-align-items-center ion-text-center">
-                            <% countanswers %>
-                            <%# choicegroup.limitanswers %> / <% maxanswers %> <%/ choicegroup.limitanswers %>
+                            <%# choicegroup.countsvisible %>
+                                <% countanswers %>
+                                <%# choicegroup.limitanswers %> / <% maxanswers %> <%/ choicegroup.limitanswers %>
+                            <%/ choicegroup.countsvisible %>
                         </ion-col>
                     </ion-row>
                 <%/ options %>

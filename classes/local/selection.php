@@ -134,20 +134,17 @@ class selection {
             }
         }
 
-        // The same tests as view.php: with no closing date the activity counts as open, whatever the opening date, and
-        // "after close" means past the closing date, not merely "not open" (before the opening date is not closed).
+        // Each date on its own, as check_date_restrictions() reads them when the choice is saved: an opening date with
+        // no closing date still keeps the activity shut until it comes.
         $now = time();
-        $this->notyetopen = $choicegroup->timeclose != 0 && $choicegroup->timeopen > $now;
-        $closed = $choicegroup->timeclose != 0 && $now > $choicegroup->timeclose;
+        $this->notyetopen = !empty($choicegroup->timeopen) && $choicegroup->timeopen > $now;
+        $closed = !empty($choicegroup->timeclose) && $now > $choicegroup->timeclose;
         $this->open = !$this->notyetopen && !$closed;
         $this->canchoose = $this->open && !isguestuser($userid) &&
             (!$this->chosen || $choicegroup->allowupdate) &&
             is_enrolled($this->context, $userid, 'mod/choicegroup:choose');
 
-        $showresults = (int)$choicegroup->showresults;
-        $this->resultsvisible = $showresults === (int)CHOICEGROUP_SHOWRESULTS_ALWAYS ||
-            ($showresults === (int)CHOICEGROUP_SHOWRESULTS_AFTER_ANSWER && $this->chosen) ||
-            ($showresults === (int)CHOICEGROUP_SHOWRESULTS_AFTER_CLOSE && $closed);
+        $this->resultsvisible = choicegroup_results_visible($choicegroup, !empty($this->chosen));
     }
 
     /**

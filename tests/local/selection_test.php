@@ -465,4 +465,32 @@ final class selection_test extends \advanced_testcase {
         $this->assertSame(5, $selection->query('', [], false, 'default', 0, 25, (int)$empty->id)['total']);
         $this->assertSame('Evening A', $selection->get_option_name((int)array_search($this->groups['Evening A']->id, $on->option)));
     }
+
+    /**
+     * An opening date ahead keeps the cards shut even without a closing date, as saving the choice would refuse it.
+     *
+     * @return void
+     */
+    public function test_an_opening_date_without_a_closing_date_keeps_the_cards_shut(): void {
+        global $DB;
+
+        $viewer = $this->create_member();
+        $choicegroup = $this->create_instance(['timerestrict' => 1, 'timeopen' => time() + DAYSECS, 'timeclose' => 0]);
+        // The form always sets both dates; a restore or a web service edit can leave the closing date empty.
+        $DB->set_field('choicegroup', 'timeclose', 0, ['id' => $choicegroup->id]);
+        $choicegroup = choicegroup_get_choicegroup($choicegroup->id);
+        $choicegroup->cm = get_coursemodule_from_instance('choicegroup', $choicegroup->id);
+
+        $selection = new selection($choicegroup, $choicegroup->cm, (int)$viewer->id);
+        $this->assertTrue($selection->is_not_open_yet());
+        $this->assertFalse($selection->can_choose());
+
+        // Control: once the opening date has passed the same viewer may choose.
+        $DB->set_field('choicegroup', 'timeopen', time() - DAYSECS, ['id' => $choicegroup->id]);
+        $choicegroup = choicegroup_get_choicegroup($choicegroup->id);
+        $choicegroup->cm = get_coursemodule_from_instance('choicegroup', $choicegroup->id);
+        $selection = new selection($choicegroup, $choicegroup->cm, (int)$viewer->id);
+        $this->assertFalse($selection->is_not_open_yet());
+        $this->assertTrue($selection->can_choose());
+    }
 }

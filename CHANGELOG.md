@@ -73,9 +73,23 @@ Fork of upstream `master` at db93774 (version 2026062401, release 1.53-dev).
 - Member names follow core group visibility, and user and group names are escaped.
 - Downloads carry only the identity fields the site shows (`showuseridentity`); the text export
   strips tabs and line breaks from cells.
+- `mod_choicegroup_get_choicegroup_options` and the Moodle App return and show the member count of a
+  group only when *Publish results* lets the user see it (or to a reader of the responses); before,
+  every student could read the counts the setting hides. A full group is still marked full.
+- A change of a user's choice runs under a lock of that user, so two submissions sent together can
+  no longer each keep their own group (two groups in single-choice mode, or past the maximum).
+- A single choice is saved in one transaction, like a set: a new group that refuses the user no
+  longer leaves them without the group they held.
+- The text export prefixes cells that start with `=`, `+`, `-` or `@` with an apostrophe, so a
+  spreadsheet does not run them as formulas.
 
 ### Fixed
 
+- The results on the report show to users with `mod/choicegroup:readresponses` in the activity's own
+  context; they asked for `mod/choicegroup:downloadresponses` in whatever context a global held.
+- An opening date ahead keeps the activity shut on the page and in the cards even without a closing
+  date, as saving the choice already refused it.
+- The Moodle App view no longer stops on `external_format_text()`, which Moodle 5.3 does not load.
 - Saving several choices redirects with "Your choice has been saved", as a single choice does: the page
   showed the selection from before the save, and a reload posted the set again.
 
